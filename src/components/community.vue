@@ -1,12 +1,13 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 
 const STORAGE_KEY = 'localhub-posts'
 const posts = ref([])
 const form = ref({ title: '', content: '', password: '' })
 const editingId = ref(null)
 
-// 페이지네이션
+// 검색 및 페이지네이션
+const searchQuery = ref('')
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
 
@@ -59,15 +60,30 @@ function formatDate(value) {
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
+// 검색 필터링
+const filteredPosts = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase()
+  if (!query) return posts.value
+
+  return posts.value.filter(post =>
+    post.title.toLowerCase().includes(query) ||
+    post.content.toLowerCase().includes(query)
+  )
+})
+
 // 페이지네이션 계산
 const totalPages = computed(() => {
-  return Math.ceil(posts.value.length / itemsPerPage.value)
+  return Math.ceil(filteredPosts.value.length / itemsPerPage.value)
 })
 
 const paginatedPosts = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value
   const end = start + itemsPerPage.value
-  return posts.value.slice(start, end)
+  return filteredPosts.value.slice(start, end)
+})
+
+watch(searchQuery, () => {
+  currentPage.value = 1
 })
 
 // 게시글 추가/수정
@@ -116,9 +132,7 @@ function addOrUpdatePost() {
   posts.value.unshift(newPost)
   savePosts()
   currentPage.value = 1
-  resetForm()
-  isWriteModalOpen.value = false
-  alert('게시글이 작성되었습니다.')
+    searchQuery.value = ''
 }
 
 // 게시글 수정 시작
@@ -406,8 +420,23 @@ function getCommentTree() {
         </button>
       </div>
 
+      <div class="search-box">
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="게시글 검색어를 입력하세요"
+          class="search-input"
+        />
+        <button type="button" @click="currentPage = 1" class="search-btn">
+          🔍 검색
+        </button>
+      </div>
+
       <div v-if="posts.length === 0" class="empty-state">
         <p>📌 게시글이 없습니다. 첫 번째 글을 작성해주세요!</p>
+      </div>
+      <div v-else-if="filteredPosts.length === 0" class="empty-state">
+        <p>🔎 검색 결과가 없습니다. 다른 검색어를 입력해주세요.</p>
       </div>
 
       <div v-else class="post-table">
