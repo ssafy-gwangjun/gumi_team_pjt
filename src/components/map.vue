@@ -69,6 +69,30 @@
             <div class="info">
               <h3>{{ place.title }}</h3>
               <p>{{ place.addr1 }} {{ place.addr2 }}</p>
+
+              <div class="place-actions">
+                <button
+                  class="action like"
+                  :class="{ on: isLiked(place) }"
+                  @click.stop="toggleLike(place)"
+                  :aria-pressed="isLiked(place)"
+                  title="좋아요"
+                >
+                  <span v-if="isLiked(place)">♥</span>
+                  <span v-else>♡</span>
+                </button>
+
+                <button
+                  class="action bookmark"
+                  :class="{ on: isBookmarked(place) }"
+                  @click.stop="toggleBookmark(place)"
+                  :aria-pressed="isBookmarked(place)"
+                  title="북마크"
+                >
+                  <span v-if="isBookmarked(place)">★</span>
+                  <span v-else>☆</span>
+                </button>
+              </div>
             </div>
           </li>
         </ul>
@@ -85,10 +109,12 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png'
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
 import iconShadowUrl from 'leaflet/dist/images/marker-shadow.png'
 
+/* 부모로 북마크/좋아요 토글을 알리기 위한 emit */
+const emit = defineEmits(['toggle-bookmark', 'toggle-like'])
+
 const GUMI_CENTER = { lat: 36.1119, lng: 128.3875 }
 const GUMI_ZOOM = 12
-const placeholderImage =
-  'https://via.placeholder.com/120x90?text=No+Image'
+const placeholderImage = 'https://via.placeholder.com/240x160?text=No+Image'
 
 const map = ref(null)
 const markerLayer = ref(null)
@@ -96,6 +122,10 @@ const allPlaces = ref([])
 const contentTypeId = ref('all')
 const searchQuery = ref('')
 const activePlaceId = ref(null)
+
+/* 로컬 상태로 좋아요 / 북마크(아이디 문자열) 유지 */
+const likedIds = ref([])
+const bookmarkedIds = ref([])
 
 const contentTypes = [
   { id: 'all', label: '전체' },
@@ -163,6 +193,30 @@ const loadData = async () => {
   allPlaces.value = responses.flatMap((data) => data.items || [])
 }
 
+/* like/bookmark helpers */
+const isLiked = (place) => likedIds.value.includes(String(place.contentid))
+const isBookmarked = (place) =>
+  bookmarkedIds.value.includes(String(place.contentid))
+
+const toggleLike = (place) => {
+  const id = String(place.contentid)
+  const idx = likedIds.value.indexOf(id)
+  if (idx >= 0) likedIds.value.splice(idx, 1)
+  else likedIds.value.push(id)
+
+  emit('toggle-like', { place, liked: isLiked(place) })
+}
+
+const toggleBookmark = (place) => {
+  const id = String(place.contentid)
+  const idx = bookmarkedIds.value.indexOf(id)
+  if (idx >= 0) bookmarkedIds.value.splice(idx, 1)
+  else bookmarkedIds.value.push(id)
+
+  emit('toggle-bookmark', { place, bookmarked: isBookmarked(place) })
+}
+
+/* 마커 업데이트 — 팝업에 대표 사진 포함 */
 const updateMarkers = () => {
   if (!map.value) return
   if (!markerLayer.value) {
@@ -176,10 +230,18 @@ const updateMarkers = () => {
     const lng = parseFloat(place.mapx)
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
 
+    const imageSrc = place.firstimage || place.firstimage2 || placeholderImage
+    const popupHtml = `
+      <div style="max-width:280px">
+        <img src="${imageSrc}" alt="${place.title || ''}"
+          style="width:100%;height:140px;object-fit:cover;border-radius:8px;margin-bottom:8px"/>
+        <strong style="display:block;margin-bottom:4px">${place.title || ''}</strong>
+        <div style="color:#444;font-size:0.95rem">${place.addr1 || ''}</div>
+      </div>
+    `
+
     const marker = L.marker([lat, lng], { icon: defaultIcon })
-      .bindPopup(
-        `<strong>${place.title}</strong><br>${place.addr1 || ''}`
-      )
+      .bindPopup(popupHtml)
       .addTo(markerLayer.value)
 
     marker.on('click', () => {
@@ -196,10 +258,13 @@ const goToPlace = (place) => {
   map.value.flyTo([lat, lng], 15, { duration: 0.8 })
   activePlaceId.value = place.contentid
 
-  L.popup({ maxWidth: 260 })
+  L.popup({ maxWidth: 320 })
     .setLatLng([lat, lng])
     .setContent(
-      `<strong>${place.title}</strong><br>${place.addr1 || ''}`
+      `<div style="max-width:320px">
+         <img src="${place.firstimage || place.firstimage2 || placeholderImage}" style="width:100%;height:140px;object-fit:cover;border-radius:8px;margin-bottom:8px"/>
+         <strong>${place.title}</strong><br>${place.addr1 || ''}
+       </div>`
     )
     .openOn(map.value)
 }
@@ -238,7 +303,10 @@ watch([filteredPlaces], updateMarkers)
 </script>
 
 <style scoped>
+/* align width with App topbar visually (App uses ~1rem padding) */
 .map-container {
+  width: calc(100% - 2rem);
+  margin: 0 auto;
   display: grid;
   gap: 1rem;
   padding: 1rem;
@@ -291,15 +359,16 @@ watch([filteredPlaces], updateMarkers)
   cursor: pointer;
 }
 
+/* make map larger relative to list */
 .map-grid {
   display: grid;
-  grid-template-columns: 1.5fr 0.9fr;
+  grid-template-columns: 2fr 0.9fr;
   gap: 1rem;
 }
 
 .leaflet-wrap {
   position: relative;
-  min-height: 560px;
+  min-height: 620px;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
@@ -333,7 +402,7 @@ watch([filteredPlaces], updateMarkers)
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-height: 560px;
+  max-height: 620px;
   overflow-y: auto;
   padding: 1rem;
   border-radius: 16px;
@@ -358,7 +427,7 @@ watch([filteredPlaces], updateMarkers)
 
 .place-list li {
   display: grid;
-  grid-template-columns: 110px 1fr;
+  grid-template-columns: 120px 1fr;
   gap: 0.85rem;
   padding: 0.85rem;
   border-radius: 14px;
@@ -376,8 +445,8 @@ watch([filteredPlaces], updateMarkers)
 }
 
 .thumb {
-  min-width: 110px;
-  min-height: 85px;
+  min-width: 120px;
+  min-height: 90px;
   overflow: hidden;
   border-radius: 14px;
   background: #eceff5;
@@ -400,6 +469,48 @@ watch([filteredPlaces], updateMarkers)
   color: #555;
   font-size: 0.95rem;
   line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.place-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.action {
+  border: none;
+  background: #eef2ff;
+  color: #1d4ed8;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.action.on {
+  background: #1d4ed8;
+  color: white;
+}
+
+.action.like {
+  background: #fff0f6;
+  color: #be185d;
+}
+
+.action.like.on {
+  background: #be185d;
+  color: white;
+}
+
+.action.bookmark {
+  background: #eef2ff;
+  color: #1d4ed8;
+}
+
+.action.bookmark.on {
+  background: #1d4ed8;
+  color: white;
 }
 
 .empty-state {
