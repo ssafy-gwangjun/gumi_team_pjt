@@ -48,25 +48,27 @@ const detectIntent = (question) => {
 
 const getDataForIntent = (intent) => {
   const categoryKeywords = {
-    region: ['지역', '권역', '구역', '동네', '인근', '주변'],
-    festival: ['축제', '행사', '공연', '이벤트', '페스티벌'],
-    restaurant: ['맛집', '음식점', '식당', '밥집', '카페', '디저트'],
+    region: ['지역', '권역', '구역', '동네', '인근', '주변', '코스'],
+    festival: ['축제', '행사', '공연', '이벤트', '페스티벌', '공연행사'],
+    restaurant: ['맛집', '음식점', '식당', '밥집', '카페', '디저트', '음식'],
     accommodation: ['숙소', '호텔', '모텔', '펜션', '민박', '게스트하우스'],
     shopping: ['쇼핑', '시장', '상점', '기념품', '몰', '아울렛', '백화점'],
-    sports: ['레포츠', '체험', '액티비티', '스포츠', '야외']
+    sports: ['레포츠', '체험', '액티비티', '스포츠', '야외', '트레킹']
   }
 
-  const keywords = categoryKeywords[intent]
-  if (!keywords) {
-    return props.attractions
+  const keywords = categoryKeywords[intent] || []
+  const allItems = Array.isArray(props.attractions) ? props.attractions : []
+
+  if (!keywords.length) {
+    return allItems.slice(0, 20)
   }
 
-  const matchedItems = props.attractions.filter(item => {
-    const searchable = `${item.title ?? ''} ${item.description ?? ''} ${item.category ?? ''}`
+  const matchedItems = allItems.filter(item => {
+    const searchable = `${item.title ?? ''} ${item.description ?? ''} ${item.category ?? ''} ${item.addr1 ?? ''} ${item.addr2 ?? ''}`
     return keywords.some(keyword => searchable.includes(keyword))
   })
 
-  return matchedItems.length ? matchedItems : props.attractions
+  return matchedItems.length ? matchedItems.slice(0, 20) : allItems.slice(0, 20)
 }
 
 const sendMessage = async (text) => {
@@ -77,7 +79,6 @@ const sendMessage = async (text) => {
   messages.value.push({ type: 'user', text: content })
   newQuestion.value = ''
   isLoading.value = true
-  messages.value.push({ type: 'typing', text: '챗봇이 입력을 이해하는 중입니다.' })
 
   try {
     const intent = detectIntent(content)
@@ -94,6 +95,7 @@ const sendMessage = async (text) => {
 - 목록 형태 등을 활용해 핵심을 전달하세요.
 - 불필요한 배경 설명은 빼고 핵심만 요약하세요.
 - 줄바꿈을 활용해 가독성을 높이세요.
+- 간단한 이모지 1~2개 정도를 적절히 활용해 답변을 친근하게 만드세요.
 - 방문 팁 등 조언을 할 때는 줄글로 제안하고, 
   구체적인 장소나 추천 메뉴 등은 목록으로 제시하세요.
 
@@ -116,13 +118,9 @@ ${JSON.stringify(relevantData, null, 2)}`
     })
 
     const reply = completion.choices[0]?.message?.content ?? '죄송합니다. 답변을 불러오지 못했습니다.'
-    const typingIndex = messages.value.findIndex(m => m.type === 'typing')
-    if (typingIndex !== -1) messages.value.splice(typingIndex, 1)
     messages.value.push({ type: 'bot', text: reply })
   } catch (err) {
     console.error(err)
-    const typingIndex = messages.value.findIndex(m => m.type === 'typing')
-    if (typingIndex !== -1) messages.value.splice(typingIndex, 1)
     messages.value.push({
       type: 'bot',
       text: `죄송합니다. 답변을 불러오지 못했습니다. (${err?.message ?? 'Unknown error'})`
@@ -138,9 +136,9 @@ defineExpose({ openWithQuestion })
 </script>
 
 <template>
-  <transition name="chat-popup">
-    <div v-if="isChatOpen" class="chat-overlay" @click.self="closeChat">
-      <div class="chat-popup" @click.stop>
+  <div class="chat-shell">
+    <transition name="chat-slide">
+      <div v-if="isChatOpen" class="chat-panel" @click.stop>
         <div class="chat-header">
           <div>
             <strong>구미 여행 챗봇</strong>
@@ -175,33 +173,34 @@ defineExpose({ openWithQuestion })
           </button>
         </div>
       </div>
-    </div>
-  </transition>
+    </transition>
 
-  <button class="floating-chat" aria-label="챗봇 열기" @click="openChat">💬</button>
+    <button class="floating-chat" aria-label="챗봇 열기" @click="openChat">💬</button>
+  </div>
 </template>
 
 <style scoped>
-.chat-overlay {
+.chat-shell {
   position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.35);
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-end;
-  padding: 1rem;
+  right: 1rem;
+  bottom: 1rem;
   z-index: 100;
-}
-
-.chat-popup {
-  width: min(430px, 100%);
-  max-height: min(760px, 92vh);
   display: flex;
   flex-direction: column;
-  border-radius: 20px;
+  align-items: flex-end;
+  gap: 0.7rem;
+}
+
+.chat-panel {
+  width: min(520px, calc(100vw - 1.5rem));
+  max-height: min(780px, calc(100vh - 1.5rem));
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
   overflow: hidden;
   background: #fff;
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .chat-header {
@@ -234,14 +233,14 @@ defineExpose({ openWithQuestion })
 }
 
 .chat-messages {
-  padding: 0.9rem;
+  padding: 0.95rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.65rem;
   overflow-y: auto;
   background: #f8fafc;
-  min-height: 280px;
-  max-height: 480px;
+  min-height: 320px;
+  max-height: 560px;
 }
 
 .message {
@@ -298,6 +297,23 @@ defineExpose({ openWithQuestion })
   40% { transform: scale(1); opacity: 1; }
 }
 
+.chat-slide-enter-active,
+.chat-slide-leave-active {
+  transition: all 0.22s ease;
+}
+
+.chat-slide-enter-from,
+.chat-slide-leave-to {
+  opacity: 0;
+  transform: translateY(14px) scale(0.98);
+}
+
+.chat-slide-enter-to,
+.chat-slide-leave-from {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
 .chat-popup-input {
   display: flex;
   gap: 0.6rem;
@@ -326,8 +342,8 @@ defineExpose({ openWithQuestion })
 }
 
 .floating-chat {
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   border: none;
   border-radius: 50%;
   background: linear-gradient(135deg, #2563eb, #3b82f6);
@@ -335,22 +351,22 @@ defineExpose({ openWithQuestion })
   font-size: 1.4rem;
   box-shadow: 0 12px 30px rgba(37, 99, 235, 0.3);
   cursor: pointer;
+  margin-right: 0.1rem;
 }
 
 @media (max-width: 768px) {
-  .chat-overlay {
-    padding: 0.5rem;
-    align-items: flex-end;
-    justify-content: center;
+  .chat-shell {
+    right: 0.7rem;
+    bottom: 0.7rem;
   }
 
-  .chat-popup {
-    width: 100%;
+  .chat-panel {
+    width: min(100%, calc(100vw - 1.2rem));
     max-height: 85vh;
   }
 
   .chat-messages {
-    min-height: 220px;
+    min-height: 260px;
     max-height: 60vh;
   }
 

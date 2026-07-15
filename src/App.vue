@@ -28,7 +28,7 @@ function toggleBookmark(item) {
   else bookmarks.value.push({ ...item })
 }
 
-/* localStorage로 북마크 유지 + 예비 데이터 로드 */
+/* localStorage로 북마크 유지 + 실제 관광 데이터 로드 */
 onMounted(async () => {
   const saved = localStorage.getItem('gumi_bookmarks')
   if (saved) {
@@ -36,9 +36,36 @@ onMounted(async () => {
   }
 
   try {
-    const res = await fetch('/data/attractions.json')
-    if (res.ok) attractions.value = await res.json()
+    const dataFiles = [
+      '구미_경북권_관광지.json',
+      '구미_경북권_문화시설.json',
+      '구미_경북권_축제공연행사.json',
+      '구미_경북권_레포츠.json',
+      '구미_경북권_숙박.json',
+      '구미_경북권_쇼핑.json',
+      '구미_경북권_음식점.json',
+      '구미_경북권_여행코스.json'
+    ]
+
+    const responses = await Promise.all(
+      dataFiles.map(async (fileName) => {
+        const res = await fetch(`/data/${fileName}`)
+        if (!res.ok) return { items: [] }
+        return res.json()
+      })
+    )
+
+    attractions.value = responses.flatMap((data) => {
+      const items = Array.isArray(data?.items) ? data.items : []
+      return items.map((item) => ({
+        ...item,
+        title: item.title || item.name || '이름 없음',
+        description: item.addr1 || item.addr2 || item.overview || item.title || '설명 없음',
+        category: item.contenttypeid ? '데이터 기반 장소' : (item.category || '기타')
+      }))
+    })
   } catch (e) {
+    console.error('관광 데이터 로드 실패:', e)
     attractions.value = [
       { id: 1, title: '구미 인삼랜드', description: '인삼과 자연을 함께 즐길 수 있는 대표 관광지입니다.', category: '자연·체험' },
       { id: 2, title: '금오산', description: '산책과 전망을 즐기기 좋은 인기 명소입니다.', category: '산책·전망' }
