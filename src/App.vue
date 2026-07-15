@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import Community from './components/community.vue'
 
 const navItems = [
   { key: 'home', label: '홈' },
@@ -155,7 +156,7 @@ watch(bookmarks, (val) => {
           </div>
         </div>
       </section>
-
+<Community />
       <aside class="chat-panel">
         <div class="chat-header">챗봇 질문하기</div>
 
