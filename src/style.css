@@ -110,6 +110,18 @@ input {
   color: #111827;
 }
 
+
+.chat-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.12);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 24px;
+}
+
 .chat-panel {
   display: flex;
   flex-direction: column;
@@ -191,10 +203,10 @@ input {
 }
 
 .chat-popup {
-  position: fixed;
-  right: 24px;
-  bottom: 92px;
-  width: 340px;
+  position: fixed;   
+  right: 24px;     
+  bottom: 92px; 
+  width: 640px;
   max-width: calc(100vw - 32px);
   background: white;
   border-radius: 16px;
