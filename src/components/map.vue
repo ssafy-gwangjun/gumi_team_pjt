@@ -3,31 +3,31 @@
     <header class="map-header">
       <div>
         <h2>🗺️ 구미 관광지도</h2>
-        <p>검색어와 유형 필터로 구미 관광지를 찾아보세요.</p>
+        <p>필터 버튼으로 원하는 유형을 빠르게 선택하고, 검색으로 장소를 찾으세요.</p>
+      </div>
+    </header>
+
+    <div class="map-actions-bar">
+      <div class="filter-buttons">
+        <button
+          v-for="type in contentTypes"
+          :key="type.id"
+          :class="['filter-button', { active: type.id === contentTypeId }]"
+          @click="setContentType(type.id)"
+        >
+          <span class="filter-icon">{{ filterIcons[type.id] }}</span>
+          {{ type.label }}
+        </button>
       </div>
 
-      <div class="map-controls-top">
+      <div class="search-box">
         <input
           v-model="searchQuery"
           type="search"
           placeholder="장소명으로 검색하기"
         />
-
-        <select v-model="contentTypeId">
-          <option
-            v-for="type in contentTypes"
-            :key="type.id"
-            :value="type.id"
-          >
-            {{ type.label }}
-          </option>
-        </select>
-
-        <button type="button" @click="resetMap">
-          구미 중심 재정렬
-        </button>
       </div>
-    </header>
+    </div>
 
     <div class="map-grid">
       <div class="leaflet-wrap">
@@ -129,7 +129,7 @@ const placeholderImage = 'https://via.placeholder.com/240x160?text=No+Image'
 const map = ref(null)
 const markerLayer = ref(null)
 const allPlaces = ref([])
-const contentTypeId = ref('all')
+const contentTypeId = ref('15')
 const searchQuery = ref('')
 const activePlaceId = ref(null)
 
@@ -137,13 +137,25 @@ const contentTypes = [
   { id: 'all', label: '전체' },
   { id: '12', label: '관광지' },
   { id: '14', label: '문화시설' },
-  { id: '15', label: '축제공연행사' },
+  { id: '15', label: '축제/공연' },
   { id: '25', label: '여행코스' },
   { id: '28', label: '레포츠' },
   { id: '32', label: '숙박' },
   { id: '38', label: '쇼핑' },
   { id: '39', label: '음식점' },
 ]
+
+const filterIcons = {
+  all: '🌐',
+  '12': '📍',
+  '14': '🏛️',
+  '15': '🎉',
+  '25': '🧭',
+  '28': '🚴',
+  '32': '🛏️',
+  '38': '🛍️',
+  '39': '🍽️',
+}
 
 const activeFilterLabel = computed(() => {
   const found = contentTypes.find((type) => type.id === contentTypeId.value)
@@ -192,11 +204,22 @@ L.Marker.prototype.options.icon = defaultIcon
 
 const getDataUrl = (fileName) => `/data/${fileName}`
 
+const loadFile = async (fileName) => {
+  const url = getDataUrl(fileName)
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error(`파일 로드 실패: ${url} (${res.status})`)
+  }
+  const data = await res.json()
+  allPlaces.value.push(...(data.items || []))
+  updateMarkers()
+}
+
 const loadData = async () => {
-  const dataFiles = [
+  const initialFiles = ['구미_경북권_축제공연행사.json']
+  const laterFiles = [
     '구미_경북권_관광지.json',
     '구미_경북권_문화시설.json',
-    '구미_경북권_축제공연행사.json',
     '구미_경북권_레포츠.json',
     '구미_경북권_숙박.json',
     '구미_경북권_쇼핑.json',
@@ -204,18 +227,25 @@ const loadData = async () => {
     '구미_경북권_여행코스.json',
   ]
 
-  const responses = await Promise.all(
-    dataFiles.map(async (fileName) => {
-      const url = getDataUrl(fileName)
-      const res = await fetch(url)
-      if (!res.ok) {
-        throw new Error(`파일 로드 실패: ${url} (${res.status})`)
-      }
-      return res.json()
-    })
-  )
+  for (const fileName of initialFiles) {
+    await loadFile(fileName)
+  }
 
-  allPlaces.value = responses.flatMap((data) => data.items || [])
+  const loadRemaining = async () => {
+    for (const fileName of laterFiles) {
+      await loadFile(fileName)
+    }
+  }
+
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(loadRemaining)
+  } else {
+    setTimeout(loadRemaining, 100)
+  }
+}
+
+const setContentType = (typeId) => {
+  contentTypeId.value = typeId
 }
 
 const toggleLike = (place) => {
@@ -259,6 +289,21 @@ const updateMarkers = () => {
   })
 }
 
+const resetMap = () => {
+  if (!map.value) return
+  map.value.setView([GUMI_CENTER.lat, GUMI_CENTER.lng], GUMI_ZOOM)
+}
+
+const zoomIn = () => {
+  if (!map.value) return
+  map.value.zoomIn()
+}
+
+const zoomOut = () => {
+  if (!map.value) return
+  map.value.zoomOut()
+}
+
 const goToPlace = (place) => {
   const lat = parseFloat(place.mapy)
   const lng = parseFloat(place.mapx)
@@ -278,21 +323,6 @@ const goToPlace = (place) => {
     .openOn(map.value)
 }
 
-const resetMap = () => {
-  if (!map.value) return
-  map.value.setView([GUMI_CENTER.lat, GUMI_CENTER.lng], GUMI_ZOOM)
-}
-
-const zoomIn = () => {
-  if (!map.value) return
-  map.value.zoomIn()
-}
-
-const zoomOut = () => {
-  if (!map.value) return
-  map.value.zoomOut()
-}
-
 onMounted(async () => {
   map.value = L.map('map', {
     center: [GUMI_CENTER.lat, GUMI_CENTER.lng],
@@ -306,7 +336,6 @@ onMounted(async () => {
 
   try {
     await loadData()
-    updateMarkers()
   } catch (error) {
     console.error('지도 데이터 로드 실패:', error)
   }
@@ -332,7 +361,7 @@ watch(filteredPlaces, updateMarkers)
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 1rem;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .map-header h2 {
@@ -345,30 +374,76 @@ watch(filteredPlaces, updateMarkers)
   color: #666;
 }
 
-.map-controls-top {
+.map-actions-bar {
   display: flex;
-  gap: 0.75rem;
   flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
 
-.map-controls-top input,
-.map-controls-top select,
-.map-controls-top button {
-  border: 1px solid #d7d7d7;
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
-  font-size: 0.95rem;
+.filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.map-controls-top input {
-  min-width: 220px;
-  flex: 1;
-}
-
-.map-controls-top button {
-  background: #2f6ae4;
-  color: white;
+.filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid transparent;
+  background: #f3f4f6;
+  color: #475569;
+  padding: 0.95rem 1.2rem;
+  border-radius: 999px;
   cursor: pointer;
+  transition: all 0.18s ease;
+  font-size: 0.95rem;
+  min-height: 48px;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+
+.filter-button:hover {
+  background: #e5e7eb;
+}
+
+.filter-button.active {
+  background: #1d4ed8;
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 12px 28px rgba(30, 64, 175, 0.18);
+}
+
+.filter-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  font-size: 1rem;
+}
+
+.search-box {
+  flex: 1;
+  min-width: 220px;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  border: 1px solid #d1d5db;
+  outline: none;
+  background: #f3f4f6;
+  color: #334155;
+}
+
+.search-box input::placeholder {
+  color: #94a3b8;
 }
 
 .map-grid {
@@ -379,7 +454,7 @@ watch(filteredPlaces, updateMarkers)
 
 .leaflet-wrap {
   position: relative;
-  min-height: 620px;
+  min-height: 520px;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
@@ -392,7 +467,7 @@ watch(filteredPlaces, updateMarkers)
 
 .map-controls {
   position: absolute;
-  top: 16px;
+  bottom: 16px;
   right: 16px;
   display: grid;
   gap: 0.5rem;
@@ -426,6 +501,15 @@ watch(filteredPlaces, updateMarkers)
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+
+.list-header strong {
+  font-size: 1rem;
+}
+
+.list-header span {
+  color: #475569;
+  font-size: 0.95rem;
 }
 
 .place-list ul {
@@ -527,5 +611,15 @@ watch(filteredPlaces, updateMarkers)
 .empty-state {
   padding: 1rem;
   color: #777;
+}
+
+@media (max-width: 980px) {
+  .map-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .leaflet-wrap {
+    min-height: 520px;
+  }
 }
 </style>
