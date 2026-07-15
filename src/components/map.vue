@@ -109,12 +109,31 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png'
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
 import iconShadowUrl from 'leaflet/dist/images/marker-shadow.png'
 
+<<<<<<< HEAD
+const props = defineProps({
+  bookmarkedIds: {
+    type: Array,
+    default: () => [],
+  },
+  likedIds: {
+    type: Array,
+    default: () => [],
+  },
+})
+
+=======
 /* 부모로 북마크/좋아요 토글을 알리기 위한 emit */
+>>>>>>> origin
 const emit = defineEmits(['toggle-bookmark', 'toggle-like'])
 
 const GUMI_CENTER = { lat: 36.1119, lng: 128.3875 }
 const GUMI_ZOOM = 12
+<<<<<<< HEAD
+const placeholderImage =
+  'https://via.placeholder.com/240x160?text=No+Image'
+=======
 const placeholderImage = 'https://via.placeholder.com/240x160?text=No+Image'
+>>>>>>> origin
 
 const map = ref(null)
 const markerLayer = ref(null)
@@ -160,6 +179,18 @@ const filteredPlaces = computed(() => {
     })
 })
 
+const normalizedLikedIds = computed(() =>
+  props.likedIds.map((id) => String(id))
+)
+const normalizedBookmarkedIds = computed(() =>
+  props.bookmarkedIds.map((id) => String(id))
+)
+
+const isLiked = (place) =>
+  normalizedLikedIds.value.includes(String(place.contentid))
+const isBookmarked = (place) =>
+  normalizedBookmarkedIds.value.includes(String(place.contentid))
+
 const defaultIcon = L.icon({
   iconUrl,
   iconRetinaUrl,
@@ -171,6 +202,8 @@ const defaultIcon = L.icon({
 })
 
 L.Marker.prototype.options.icon = defaultIcon
+
+const getDataUrl = (fileName) => `/data/${fileName}`
 
 const loadData = async () => {
   const dataFiles = [
@@ -185,9 +218,14 @@ const loadData = async () => {
   ]
 
   const responses = await Promise.all(
-    dataFiles.map((fileName) =>
-      fetch(`/data/${fileName}`).then((res) => res.json())
-    )
+    dataFiles.map(async (fileName) => {
+      const url = getDataUrl(fileName)
+      const res = await fetch(url)
+      if (!res.ok) {
+        throw new Error(`파일 로드 실패: ${url} (${res.status})`)
+      }
+      return res.json()
+    })
   )
 
   allPlaces.value = responses.flatMap((data) => data.items || [])
@@ -295,11 +333,15 @@ onMounted(async () => {
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map.value)
 
-  await loadData()
-  updateMarkers()
+  try {
+    await loadData()
+    updateMarkers()
+  } catch (error) {
+    console.error('지도 데이터 로드 실패:', error)
+  }
 })
 
-watch([filteredPlaces], updateMarkers)
+watch(filteredPlaces, updateMarkers)
 </script>
 
 <style scoped>
