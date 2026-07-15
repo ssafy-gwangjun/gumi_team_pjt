@@ -196,7 +196,7 @@ const loadData = async () => {
   const dataFiles = [
     '구미_경북권_관광지.json',
     '구미_경북권_문화시설.json',
-    '구미_경북권_축제공연사.json',
+    '구미_경북권_축제공연행사.json',
     '구미_경북권_레포츠.json',
     '구미_경북권_숙박.json',
     '구미_경북권_쇼핑.json',
