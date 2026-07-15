@@ -95,7 +95,7 @@ watch(likes, (val) => {
     </main>
 
     <div class="chat-wrapper">
-      <Chatbot />
+      <Chatbot :attractions="attractions" ref="chatbotRef" />
     </div>
   </div>
 </template>
