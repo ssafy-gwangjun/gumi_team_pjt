@@ -45,7 +45,6 @@ const detectIntent = (question) => {
   }
   return 'general'
 }
-const isLoading = ref(false)
 
 const getDataForIntent = (intent) => {
   const categoryKeywords = {
