@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 
+import Chatbot from './components/chatbot.vue'
+
+
 const navItems = [
   { key: 'home', label: '홈' },
   { key: 'places', label: '관광지 안내' },
@@ -11,11 +14,15 @@ const currentPage = ref('home')
 const attractions = ref([])
 const bookmarks = ref([])
 
-const messages = ref([
-  { type: 'bot', text: '구미 여행에 대해 무엇이 궁금하세요?' }
-])
-const newQuestion = ref('')
-const isChatOpen = ref(false)
+const chatQuery = ref('')
+const chatbotRef = ref(null)
+
+function openChatWithQuestion() {
+  const text = chatQuery.value.trim()
+  if (!text) return
+  chatbotRef.value?.openWithQuestion(text)
+  chatQuery.value = ''
+}
 
 function changePage(page) {
   currentPage.value = page
@@ -32,21 +39,6 @@ function toggleBookmark(item) {
   } else {
     bookmarks.value.push({ ...item })
   }
-}
-
-function openChat() { isChatOpen.value = true }
-function closeChat() { isChatOpen.value = false }
-
-function sendMessage() {
-  const text = newQuestion.value.trim()
-  if (!text) return
-  openChat()
-  messages.value.push({ type: 'user', text })
-  messages.value.push({
-    type: 'bot',
-    text: `“${text}”에 대한 정보는 곧 챗봇에서 더 자세히 답변해드릴 수 있어요.`
-  })
-  newQuestion.value = ''
 }
 
 /* localStorage로 북마크 유지 + 초기 JSON 로드 시도 */
@@ -98,6 +90,36 @@ watch(bookmarks, (val) => {
           <div class="actions">
             <button type="button" @click="changePage('places')">관광지 안내 보기</button>
             <button type="button" class="secondary" @click="changePage('bookmarks')">북마크 보기</button>
+          </div>
+        </div>
+        
+
+        <div v-else-if="currentPage === 'places'" class="page-section">
+          <div class="page-header">
+            <h2>관광지 안내</h2>
+            <p>구미의 대표 관광지와 추천 포인트를 확인해보세요.</p>
+          </div>
+
+          <div class="card-grid">
+            <article v-for="item in attractions" :key="item.id" class="info-card">
+              <div class="card-row">
+                <div>
+                  <h3>{{ item.title }}</h3>
+                  <p>{{ item.description }}</p>
+                  <span class="tag">{{ item.category }}</span>
+                </div>
+
+                <button
+                  class="bookmark-btn"
+                  :class="{ on: isBookmarked(item.id) }"
+                  @click="toggleBookmark(item)"
+                  :aria-pressed="isBookmarked(item.id)"
+                >
+                  <span v-if="isBookmarked(item.id)">★</span>
+                  <span v-else>☆</span>
+                </button>
+              </div>
+            </article>
           </div>
         </div>
 
@@ -156,6 +178,7 @@ watch(bookmarks, (val) => {
         </div>
       </section>
 
+<Community />
       <aside class="chat-panel">
         <div class="chat-header">챗봇 질문하기</div>
 
@@ -170,42 +193,17 @@ watch(bookmarks, (val) => {
         </div>
 
         <div class="chat-input-row">
+
           <input
-            v-model="newQuestion"
-            @keyup.enter="sendMessage"
-            placeholder="질문을 입력해 주세요"
+            v-model="chatQuery"
+            @keyup.enter="openChatWithQuestion"
+            placeholder="질문을 입력하면 챗봇이 열립니다"
           />
-          <button @click="sendMessage">전송</button>
+          <button @click="openChatWithQuestion">챗봇으로 이동</button>
         </div>
-      </aside>
+      </section>
     </main>
-
-    <div v-if="isChatOpen" class="chat-popup">
-      <div class="chat-popup-header">
-        <strong>구미 여행 챗봇</strong>
-        <button class="close-btn" @click="closeChat">✕</button>
-      </div>
-
-      <div class="chat-popup-messages">
-        <div
-          v-for="(message, index) in messages"
-          :key="index"
-          :class="['message', message.type]"
-        >
-          {{ message.text }}
-        </div>
-      </div>
-
-      <div class="chat-popup-input">
-        <input
-          v-model="newQuestion"
-          @keyup.enter="sendMessage"
-          placeholder="질문을 입력해 주세요"
-        />
-        <button @click="sendMessage">전송</button>
-      </div>
-    </div>
-
-    <button class="floating-chat" aria-label="챗봇 열기" @click="openChat">💬</button>
+  
+   <Chatbot ref="chatbotRef" />
   </div>
 </template>
