@@ -1,28 +1,18 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-
+import MapView from './components/map.vue'
 import Chatbot from './components/chatbot.vue'
-
+import Community from './components/community.vue'
 
 const navItems = [
-  { key: 'home', label: '홈' },
-  { key: 'places', label: '관광지 안내' },
-  { key: 'bookmarks', label: '북마크' }
+  { key: 'map', label: '관광 지도 안내' },
+  { key: 'community', label: '익명 커뮤니티' },
+  { key: 'bookmarks', label: '내 즐겨찾기' }
 ]
 
-const currentPage = ref('home')
+const currentPage = ref('map')
 const attractions = ref([])
 const bookmarks = ref([])
-
-const chatQuery = ref('')
-const chatbotRef = ref(null)
-
-function openChatWithQuestion() {
-  const text = chatQuery.value.trim()
-  if (!text) return
-  chatbotRef.value?.openWithQuestion(text)
-  chatQuery.value = ''
-}
 
 function changePage(page) {
   currentPage.value = page
@@ -34,14 +24,11 @@ function isBookmarked(id) {
 
 function toggleBookmark(item) {
   const idx = bookmarks.value.findIndex(b => b.id === item.id)
-  if (idx >= 0) {
-    bookmarks.value.splice(idx, 1)
-  } else {
-    bookmarks.value.push({ ...item })
-  }
+  if (idx >= 0) bookmarks.value.splice(idx, 1)
+  else bookmarks.value.push({ ...item })
 }
 
-/* localStorage로 북마크 유지 + 초기 JSON 로드 시도 */
+/* localStorage로 북마크 유지 + 예비 데이터 로드 */
 onMounted(async () => {
   const saved = localStorage.getItem('gumi_bookmarks')
   if (saved) {
@@ -52,7 +39,6 @@ onMounted(async () => {
     const res = await fetch('/data/attractions.json')
     if (res.ok) attractions.value = await res.json()
   } catch (e) {
-    // 실패하면 간단한 예시 데이터 사용
     attractions.value = [
       { id: 1, title: '구미 인삼랜드', description: '인삼과 자연을 함께 즐길 수 있는 대표 관광지입니다.', category: '자연·체험' },
       { id: 2, title: '금오산', description: '산책과 전망을 즐기기 좋은 인기 명소입니다.', category: '산책·전망' }
@@ -68,13 +54,16 @@ watch(bookmarks, (val) => {
 <template>
   <div class="app-shell">
     <header class="topbar">
-      <h1>구미 여행 가이드</h1>
+      <div>
+        <h1>구미 여행 가이드</h1>
+        <p>지도, 커뮤니티, 즐겨찾기를 확인하세요.</p>
+      </div>
+
       <nav class="nav">
         <button
           v-for="item in navItems"
           :key="item.key"
-          class="nav-link"
-          :class="{ active: currentPage === item.key }"
+          :class="['nav-link', { active: currentPage === item.key }]"
           @click="changePage(item.key)"
         >
           {{ item.label }}
@@ -84,78 +73,14 @@ watch(bookmarks, (val) => {
 
     <main class="main-content">
       <section class="content-panel">
-        <div v-if="currentPage === 'home'" class="page-section">
-          <h2>구미의 숨은 명소를 만나보세요</h2>
-          <p>맛집, 관광지, 사진 명소까지 한 번에 확인할 수 있는 여행 가이드입니다.</p>
-          <div class="actions">
-            <button type="button" @click="changePage('places')">관광지 안내 보기</button>
-            <button type="button" class="secondary" @click="changePage('bookmarks')">북마크 보기</button>
-          </div>
-        </div>
-        
+        <MapView v-if="currentPage === 'map'" />
 
-        <div v-else-if="currentPage === 'places'" class="page-section">
-          <div class="page-header">
-            <h2>관광지 안내</h2>
-            <p>구미의 대표 관광지와 추천 포인트를 확인해보세요.</p>
-          </div>
-
-          <div class="card-grid">
-            <article v-for="item in attractions" :key="item.id" class="info-card">
-              <div class="card-row">
-                <div>
-                  <h3>{{ item.title }}</h3>
-                  <p>{{ item.description }}</p>
-                  <span class="tag">{{ item.category }}</span>
-                </div>
-
-                <button
-                  class="bookmark-btn"
-                  :class="{ on: isBookmarked(item.id) }"
-                  @click="toggleBookmark(item)"
-                  :aria-pressed="isBookmarked(item.id)"
-                >
-                  <span v-if="isBookmarked(item.id)">★</span>
-                  <span v-else>☆</span>
-                </button>
-              </div>
-            </article>
-          </div>
-        </div>
-
-        <div v-else-if="currentPage === 'places'" class="page-section">
-          <div class="page-header">
-            <h2>관광지 안내</h2>
-            <p>구미의 대표 관광지와 추천 포인트를 확인해보세요.</p>
-          </div>
-
-          <div class="card-grid">
-            <article v-for="item in attractions" :key="item.id" class="info-card">
-              <div class="card-row">
-                <div>
-                  <h3>{{ item.title }}</h3>
-                  <p>{{ item.description }}</p>
-                  <span class="tag">{{ item.category }}</span>
-                </div>
-
-                <button
-                  class="bookmark-btn"
-                  :class="{ on: isBookmarked(item.id) }"
-                  @click="toggleBookmark(item)"
-                  :aria-pressed="isBookmarked(item.id)"
-                >
-                  <span v-if="isBookmarked(item.id)">★</span>
-                  <span v-else>☆</span>
-                </button>
-              </div>
-            </article>
-          </div>
-        </div>
+        <Community v-else-if="currentPage === 'community'" />
 
         <div v-else-if="currentPage === 'bookmarks'" class="page-section">
           <div class="page-header">
-            <h2>북마크</h2>
-            <p>나중에 다시 가고 싶은 장소를 모아둘 수 있습니다.</p>
+            <h2>내 즐겨찾기</h2>
+            <p>나중에 다시 보고 싶은 장소를 저장해두세요.</p>
           </div>
 
           <div class="card-grid" v-if="bookmarks.length">
@@ -172,38 +97,70 @@ watch(bookmarks, (val) => {
             </article>
           </div>
 
-          <div v-else class="bookmarks-empty">
-            북마크된 항목이 없습니다. 관광지에서 별표를 눌러 저장해보세요.
+          <div v-else class="empty-state">
+            저장된 즐겨찾기가 없습니다.
           </div>
-        </div>
-      </section>
-
-<Community />
-      <aside class="chat-panel">
-        <div class="chat-header">챗봇 질문하기</div>
-
-        <div class="chat-messages">
-          <div
-            v-for="(message, index) in messages"
-            :key="index"
-            :class="['message', message.type]"
-          >
-            {{ message.text }}
-          </div>
-        </div>
-
-        <div class="chat-input-row">
-
-          <input
-            v-model="chatQuery"
-            @keyup.enter="openChatWithQuestion"
-            placeholder="질문을 입력하면 챗봇이 열립니다"
-          />
-          <button @click="openChatWithQuestion">챗봇으로 이동</button>
         </div>
       </section>
     </main>
-  
-   <Chatbot ref="chatbotRef" />
+
+    <div class="chat-wrapper">
+      <Chatbot />
+    </div>
   </div>
 </template>
+
+<style scoped>
+.app-shell {
+  min-height: 100vh;
+  background: #f3f6fb;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+}
+
+.nav {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.nav-link {
+  padding: 0.6rem 0.9rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1d4ed8;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.nav-link.active {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.main-content {
+  margin-top: 1rem;
+}
+
+.content-panel {
+  min-height: calc(100vh - 160px);
+}
+
+/* Chatbot 위치: 우하단 고정 */
+.chat-wrapper {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 60;
+}
+</style>
