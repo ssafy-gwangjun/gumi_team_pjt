@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+
 import Chatbot from './components/chatbot.vue'
 
 
@@ -131,9 +132,22 @@ watch(bookmarks, (val) => {
         </div>
       </section>
 
-    <section class="chat-launcher">
-        <h2>챗봇에게 궁금한 점을 물어보세요</h2>
-        <div class="chat-launcher-row">
+<Community />
+      <aside class="chat-panel">
+        <div class="chat-header">챗봇 질문하기</div>
+
+        <div class="chat-messages">
+          <div
+            v-for="(message, index) in messages"
+            :key="index"
+            :class="['message', message.type]"
+          >
+            {{ message.text }}
+          </div>
+        </div>
+
+        <div class="chat-input-row">
+
           <input
             v-model="chatQuery"
             @keyup.enter="openChatWithQuestion"
