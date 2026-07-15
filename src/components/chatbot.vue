@@ -138,66 +138,233 @@ defineExpose({ openWithQuestion })
 </script>
 
 <template>
- <transition name="chat-popup">
-  <div v-if="isChatOpen" class="chat-overlay" @click.self="closeChat">
-   <div class="chat-popup" @click.stop>
-    <div class="chat-header">챗봇 질문하기</div>
-
-    <div class="chat-messages">
-      <div
-        v-for="(message, index) in messages"
-        :key="index"
-        :class="['message', message.type, message.type === 'typing' ? 'typing-dot' : '']"
-      >
-        {{ message.text }}
-      </div>
-    </div>
-
-      <div class="chat-popup-input">
-        <input
-          v-model="newQuestion"
-          :disabled="isLoading"
-          @keyup.enter="sendMessage()"
-          :placeholder="isLoading ? '전송 중입니다...' : '질문을 입력해 주세요'"
-        />
-        <button @click="sendMessage()" :disabled="isLoading">
-          {{ isLoading ? '전송 중...' : '전송' }}
-        </button>
-      </div>
-    </div>
-    </div>
-    </transition>
-
-<button class="floating-chat" aria-label="챗봇 열기" @click="openChat">
-    💬
-  </button>
-
   <transition name="chat-popup">
     <div v-if="isChatOpen" class="chat-overlay" @click.self="closeChat">
       <div class="chat-popup" @click.stop>
-        <div class="chat-popup-header">
-          <strong>구미 여행 챗봇</strong>
+        <div class="chat-header">
+          <div>
+            <strong>구미 여행 챗봇</strong>
+            <p>여행 질문을 바로 입력해보세요.</p>
+          </div>
+          <button class="close-btn" @click="closeChat" aria-label="챗봇 닫기">✕</button>
         </div>
 
-        <div class="chat-popup-messages">
+        <div class="chat-messages">
           <div
             v-for="(message, index) in messages"
             :key="index"
-            :class="['message', message.type]"
+            :class="['message', message.type, message.type === 'typing' ? 'typing-dot' : '']"
           >
             {{ message.text }}
+          </div>
+
+          <div v-if="isLoading" class="message bot typing-indicator" aria-live="polite">
+            <span></span><span></span><span></span>
           </div>
         </div>
 
         <div class="chat-popup-input">
           <input
             v-model="newQuestion"
-            @keyup.enter="sendMessage()"
-            placeholder="질문을 입력해 주세요"
+            :disabled="isLoading"
+            @keyup.enter.prevent="sendMessage()"
+            :placeholder="isLoading ? '전송 중입니다...' : '질문을 입력해 주세요'"
           />
-          <button type="button" @click="sendMessage()">전송</button>
+          <button @click="sendMessage()" :disabled="isLoading">
+            {{ isLoading ? '전송 중...' : '전송' }}
+          </button>
         </div>
       </div>
     </div>
   </transition>
+
+  <button class="floating-chat" aria-label="챗봇 열기" @click="openChat">💬</button>
 </template>
+
+<style scoped>
+.chat-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  padding: 1rem;
+  z-index: 100;
+}
+
+.chat-popup {
+  width: min(430px, 100%);
+  max-height: min(760px, 92vh);
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
+}
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: white;
+}
+
+.chat-header strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.chat-header p {
+  margin: 0.2rem 0 0;
+  font-size: 0.84rem;
+  opacity: 0.95;
+}
+
+.close-btn {
+  border: none;
+  background: transparent;
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.chat-messages {
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  overflow-y: auto;
+  background: #f8fafc;
+  min-height: 280px;
+  max-height: 480px;
+}
+
+.message {
+  width: fit-content;
+  max-width: 88%;
+  padding: 0.7rem 0.85rem;
+  border-radius: 14px;
+  line-height: 1.45;
+  white-space: pre-line;
+  word-break: keep-all;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+.message.user {
+  align-self: flex-end;
+  background: #dbeafe;
+  color: #1e3a8a;
+  border-bottom-right-radius: 6px;
+}
+
+.message.bot {
+  align-self: flex-start;
+  background: white;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  border-bottom-left-radius: 6px;
+}
+
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.65rem 0.8rem;
+}
+
+.typing-indicator span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+  animation: bounce 1.2s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0.8); opacity: 0.6; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.chat-popup-input {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.chat-popup-input input {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 0 0.95rem;
+  font-size: 0.95rem;
+}
+
+.chat-popup-input button {
+  border: none;
+  border-radius: 999px;
+  padding: 0 0.95rem;
+  min-height: 44px;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+}
+
+.floating-chat {
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: white;
+  font-size: 1.4rem;
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.3);
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .chat-overlay {
+    padding: 0.5rem;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .chat-popup {
+    width: 100%;
+    max-height: 85vh;
+  }
+
+  .chat-messages {
+    min-height: 220px;
+    max-height: 60vh;
+  }
+
+  .chat-popup-input {
+    flex-direction: column;
+  }
+
+  .chat-popup-input button {
+    width: 100%;
+  }
+
+  .floating-chat {
+    width: 52px;
+    height: 52px;
+  }
+}
+</style>
