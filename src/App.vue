@@ -3,6 +3,7 @@ import { ref, onMounted, watch } from 'vue'
 import MapView from './components/map.vue'
 import Chatbot from './components/chatbot.vue'
 import Community from './components/community.vue'
+import BookmarkView from './components/bookmark.vue'
 
 const navItems = [
   { key: 'map', label: '관광 지도 안내' },
@@ -11,70 +12,45 @@ const navItems = [
 ]
 
 const currentPage = ref('map')
-const attractions = ref([])
 const bookmarks = ref([])
+const likes = ref([])
+const attractions = ref([])
+const chatbotRef = ref(null)
 
 function changePage(page) {
   currentPage.value = page
 }
 
-function isBookmarked(id) {
-  return bookmarks.value.some(b => b.id === id)
-}
-
 function toggleBookmark(item) {
-  const idx = bookmarks.value.findIndex(b => b.id === item.id)
+  const idx = bookmarks.value.findIndex(b => b.contentid === item.contentid)
   if (idx >= 0) bookmarks.value.splice(idx, 1)
   else bookmarks.value.push({ ...item })
 }
 
-/* localStorage로 북마크 유지 + 실제 관광 데이터 로드 */
-onMounted(async () => {
-  const saved = localStorage.getItem('gumi_bookmarks')
-  if (saved) {
-    try { bookmarks.value = JSON.parse(saved) } catch {}
+function toggleLike(item) {
+  const idx = likes.value.findIndex(l => l.contentid === item.contentid)
+  if (idx >= 0) likes.value.splice(idx, 1)
+  else likes.value.push({ ...item })
+}
+
+onMounted(() => {
+  const savedBookmarks = localStorage.getItem('gumi_bookmarks')
+  if (savedBookmarks) {
+    try { bookmarks.value = JSON.parse(savedBookmarks) } catch {}
   }
 
-  try {
-    const dataFiles = [
-      '구미_경북권_관광지.json',
-      '구미_경북권_문화시설.json',
-      '구미_경북권_축제공연행사.json',
-      '구미_경북권_레포츠.json',
-      '구미_경북권_숙박.json',
-      '구미_경북권_쇼핑.json',
-      '구미_경북권_음식점.json',
-      '구미_경북권_여행코스.json'
-    ]
-
-    const responses = await Promise.all(
-      dataFiles.map(async (fileName) => {
-        const res = await fetch(`/data/${fileName}`)
-        if (!res.ok) return { items: [] }
-        return res.json()
-      })
-    )
-
-    attractions.value = responses.flatMap((data) => {
-      const items = Array.isArray(data?.items) ? data.items : []
-      return items.map((item) => ({
-        ...item,
-        title: item.title || item.name || '이름 없음',
-        description: item.addr1 || item.addr2 || item.overview || item.title || '설명 없음',
-        category: item.contenttypeid ? '데이터 기반 장소' : (item.category || '기타')
-      }))
-    })
-  } catch (e) {
-    console.error('관광 데이터 로드 실패:', e)
-    attractions.value = [
-      { id: 1, title: '구미 인삼랜드', description: '인삼과 자연을 함께 즐길 수 있는 대표 관광지입니다.', category: '자연·체험' },
-      { id: 2, title: '금오산', description: '산책과 전망을 즐기기 좋은 인기 명소입니다.', category: '산책·전망' }
-    ]
+  const savedLikes = localStorage.getItem('gumi_likes')
+  if (savedLikes) {
+    try { likes.value = JSON.parse(savedLikes) } catch {}
   }
 })
 
 watch(bookmarks, (val) => {
   localStorage.setItem('gumi_bookmarks', JSON.stringify(val))
+}, { deep: true })
+
+watch(likes, (val) => {
+  localStorage.setItem('gumi_likes', JSON.stringify(val))
 }, { deep: true })
 </script>
 
@@ -100,34 +76,23 @@ watch(bookmarks, (val) => {
 
     <main class="main-content">
       <section class="content-panel">
-        <MapView v-if="currentPage === 'map'" />
+        <MapView
+          v-if="currentPage === 'map'"
+          @toggle-bookmark="toggleBookmark"
+          @toggle-like="toggleLike"
+          :bookmarked-ids="bookmarks.map(b => b.contentid)"
+          :liked-ids="likes.map(l => l.contentid)"
+        />
 
         <Community v-else-if="currentPage === 'community'" />
 
-        <div v-else-if="currentPage === 'bookmarks'" class="page-section">
-          <div class="page-header">
-            <h2>내 즐겨찾기</h2>
-            <p>나중에 다시 보고 싶은 장소를 저장해두세요.</p>
-          </div>
-
-          <div class="card-grid" v-if="bookmarks.length">
-            <article v-for="item in bookmarks" :key="item.id" class="info-card">
-              <div class="card-row">
-                <div>
-                  <h3>{{ item.title }}</h3>
-                  <p>{{ item.description }}</p>
-                  <span class="tag">{{ item.category }}</span>
-                </div>
-
-                <button class="bookmark-btn on" @click="toggleBookmark(item)">★</button>
-              </div>
-            </article>
-          </div>
-
-          <div v-else class="empty-state">
-            저장된 즐겨찾기가 없습니다.
-          </div>
-        </div>
+        <BookmarkView
+          v-else-if="currentPage === 'bookmarks'"
+          :bookmarks="bookmarks"
+          :likes="likes"
+          @toggle-bookmark="toggleBookmark"
+          @toggle-like="toggleLike"
+        />
       </section>
     </main>
 
@@ -143,9 +108,15 @@ watch(bookmarks, (val) => {
   background: #f3f6fb;
   padding: 1rem;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .topbar {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -154,6 +125,17 @@ watch(bookmarks, (val) => {
   background: #fff;
   border-radius: 14px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+}
+
+.main-content {
+  width: 100%;
+  max-width: 1600px;
+  margin: 1rem auto 0;
+}
+
+.content-panel {
+  width: 100%;
+  min-height: calc(100vh - 160px);
 }
 
 .nav {
@@ -175,15 +157,6 @@ watch(bookmarks, (val) => {
   color: #fff;
 }
 
-.main-content {
-  margin-top: 1rem;
-}
-
-.content-panel {
-  min-height: calc(100vh - 160px);
-}
-
-/* Chatbot 위치: 우하단 고정 */
 .chat-wrapper {
   position: fixed;
   right: 1.25rem;

@@ -109,7 +109,17 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png'
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
 import iconShadowUrl from 'leaflet/dist/images/marker-shadow.png'
 
-/* 부모로 북마크/좋아요 토글을 알리기 위한 emit */
+const props = defineProps({
+  bookmarkedIds: {
+    type: Array,
+    default: () => [],
+  },
+  likedIds: {
+    type: Array,
+    default: () => [],
+  },
+})
+
 const emit = defineEmits(['toggle-bookmark', 'toggle-like'])
 
 const GUMI_CENTER = { lat: 36.1119, lng: 128.3875 }
@@ -122,10 +132,6 @@ const allPlaces = ref([])
 const contentTypeId = ref('all')
 const searchQuery = ref('')
 const activePlaceId = ref(null)
-
-/* 로컬 상태로 좋아요 / 북마크(아이디 문자열) 유지 */
-const likedIds = ref([])
-const bookmarkedIds = ref([])
 
 const contentTypes = [
   { id: 'all', label: '전체' },
@@ -160,6 +166,18 @@ const filteredPlaces = computed(() => {
     })
 })
 
+const normalizedLikedIds = computed(() =>
+  props.likedIds.map((id) => String(id))
+)
+const normalizedBookmarkedIds = computed(() =>
+  props.bookmarkedIds.map((id) => String(id))
+)
+
+const isLiked = (place) =>
+  normalizedLikedIds.value.includes(String(place.contentid))
+const isBookmarked = (place) =>
+  normalizedBookmarkedIds.value.includes(String(place.contentid))
+
 const defaultIcon = L.icon({
   iconUrl,
   iconRetinaUrl,
@@ -172,11 +190,13 @@ const defaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = defaultIcon
 
+const getDataUrl = (fileName) => `/data/${fileName}`
+
 const loadData = async () => {
   const dataFiles = [
     '구미_경북권_관광지.json',
     '구미_경북권_문화시설.json',
-    '구미_경북권_축제공연행사.json',
+    '구미_경북권_축제공연사.json',
     '구미_경북권_레포츠.json',
     '구미_경북권_숙박.json',
     '구미_경북권_쇼핑.json',
@@ -185,38 +205,27 @@ const loadData = async () => {
   ]
 
   const responses = await Promise.all(
-    dataFiles.map((fileName) =>
-      fetch(`/data/${fileName}`).then((res) => res.json())
-    )
+    dataFiles.map(async (fileName) => {
+      const url = getDataUrl(fileName)
+      const res = await fetch(url)
+      if (!res.ok) {
+        throw new Error(`파일 로드 실패: ${url} (${res.status})`)
+      }
+      return res.json()
+    })
   )
 
   allPlaces.value = responses.flatMap((data) => data.items || [])
 }
 
-/* like/bookmark helpers */
-const isLiked = (place) => likedIds.value.includes(String(place.contentid))
-const isBookmarked = (place) =>
-  bookmarkedIds.value.includes(String(place.contentid))
-
 const toggleLike = (place) => {
-  const id = String(place.contentid)
-  const idx = likedIds.value.indexOf(id)
-  if (idx >= 0) likedIds.value.splice(idx, 1)
-  else likedIds.value.push(id)
-
-  emit('toggle-like', { place, liked: isLiked(place) })
+  emit('toggle-like', place)
 }
 
 const toggleBookmark = (place) => {
-  const id = String(place.contentid)
-  const idx = bookmarkedIds.value.indexOf(id)
-  if (idx >= 0) bookmarkedIds.value.splice(idx, 1)
-  else bookmarkedIds.value.push(id)
-
-  emit('toggle-bookmark', { place, bookmarked: isBookmarked(place) })
+  emit('toggle-bookmark', place)
 }
 
-/* 마커 업데이트 — 팝업에 대표 사진 포함 */
 const updateMarkers = () => {
   if (!map.value) return
   if (!markerLayer.value) {
@@ -295,15 +304,18 @@ onMounted(async () => {
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map.value)
 
-  await loadData()
-  updateMarkers()
+  try {
+    await loadData()
+    updateMarkers()
+  } catch (error) {
+    console.error('지도 데이터 로드 실패:', error)
+  }
 })
 
-watch([filteredPlaces], updateMarkers)
+watch(filteredPlaces, updateMarkers)
 </script>
 
 <style scoped>
-/* align width with App topbar visually (App uses ~1rem padding) */
 .map-container {
   width: calc(100% - 2rem);
   margin: 0 auto;
@@ -359,7 +371,6 @@ watch([filteredPlaces], updateMarkers)
   cursor: pointer;
 }
 
-/* make map larger relative to list */
 .map-grid {
   display: grid;
   grid-template-columns: 2fr 0.9fr;
