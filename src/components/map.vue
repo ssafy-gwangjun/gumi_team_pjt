@@ -109,7 +109,6 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png'
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
 import iconShadowUrl from 'leaflet/dist/images/marker-shadow.png'
 
-<<<<<<< HEAD
 const props = defineProps({
   bookmarkedIds: {
     type: Array,
@@ -121,19 +120,11 @@ const props = defineProps({
   },
 })
 
-=======
-/* 부모로 북마크/좋아요 토글을 알리기 위한 emit */
->>>>>>> origin
 const emit = defineEmits(['toggle-bookmark', 'toggle-like'])
 
 const GUMI_CENTER = { lat: 36.1119, lng: 128.3875 }
 const GUMI_ZOOM = 12
-<<<<<<< HEAD
-const placeholderImage =
-  'https://via.placeholder.com/240x160?text=No+Image'
-=======
 const placeholderImage = 'https://via.placeholder.com/240x160?text=No+Image'
->>>>>>> origin
 
 const map = ref(null)
 const markerLayer = ref(null)
@@ -141,10 +132,6 @@ const allPlaces = ref([])
 const contentTypeId = ref('all')
 const searchQuery = ref('')
 const activePlaceId = ref(null)
-
-/* 로컬 상태로 좋아요 / 북마크(아이디 문자열) 유지 */
-const likedIds = ref([])
-const bookmarkedIds = ref([])
 
 const contentTypes = [
   { id: 'all', label: '전체' },
@@ -209,7 +196,7 @@ const loadData = async () => {
   const dataFiles = [
     '구미_경북권_관광지.json',
     '구미_경북권_문화시설.json',
-    '구미_경북권_축제공연행사.json',
+    '구미_경북권_축제공연사.json',
     '구미_경북권_레포츠.json',
     '구미_경북권_숙박.json',
     '구미_경북권_쇼핑.json',
@@ -231,30 +218,14 @@ const loadData = async () => {
   allPlaces.value = responses.flatMap((data) => data.items || [])
 }
 
-/* like/bookmark helpers */
-const isLiked = (place) => likedIds.value.includes(String(place.contentid))
-const isBookmarked = (place) =>
-  bookmarkedIds.value.includes(String(place.contentid))
-
 const toggleLike = (place) => {
-  const id = String(place.contentid)
-  const idx = likedIds.value.indexOf(id)
-  if (idx >= 0) likedIds.value.splice(idx, 1)
-  else likedIds.value.push(id)
-
-  emit('toggle-like', { place, liked: isLiked(place) })
+  emit('toggle-like', place)
 }
 
 const toggleBookmark = (place) => {
-  const id = String(place.contentid)
-  const idx = bookmarkedIds.value.indexOf(id)
-  if (idx >= 0) bookmarkedIds.value.splice(idx, 1)
-  else bookmarkedIds.value.push(id)
-
-  emit('toggle-bookmark', { place, bookmarked: isBookmarked(place) })
+  emit('toggle-bookmark', place)
 }
 
-/* 마커 업데이트 — 팝업에 대표 사진 포함 */
 const updateMarkers = () => {
   if (!map.value) return
   if (!markerLayer.value) {
@@ -345,7 +316,6 @@ watch(filteredPlaces, updateMarkers)
 </script>
 
 <style scoped>
-/* align width with App topbar visually (App uses ~1rem padding) */
 .map-container {
   width: calc(100% - 2rem);
   margin: 0 auto;
@@ -401,7 +371,6 @@ watch(filteredPlaces, updateMarkers)
   cursor: pointer;
 }
 
-/* make map larger relative to list */
 .map-grid {
   display: grid;
   grid-template-columns: 2fr 0.9fr;

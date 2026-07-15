@@ -14,6 +14,8 @@ const navItems = [
 const currentPage = ref('map')
 const bookmarks = ref([])
 const likes = ref([])
+const attractions = ref([])
+const chatbotRef = ref(null)
 
 function changePage(page) {
   currentPage.value = page
