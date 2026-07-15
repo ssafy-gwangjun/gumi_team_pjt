@@ -1,10 +1,14 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
 const STORAGE_KEY = 'localhub-posts'
 const posts = ref([])
 const form = ref({ title: '', content: '', password: '' })
 const editingId = ref(null)
+
+// 페이지네이션
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
 
 // 모달 상태
 const isModalOpen = ref(false)
@@ -55,6 +59,17 @@ function formatDate(value) {
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
+// 페이지네이션 계산
+const totalPages = computed(() => {
+  return Math.ceil(posts.value.length / itemsPerPage.value)
+})
+
+const paginatedPosts = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return posts.value.slice(start, end)
+})
+
 // 게시글 추가/수정
 function addOrUpdatePost() {
   const title = form.value.title.trim()
@@ -80,7 +95,7 @@ function addOrUpdatePost() {
     target.updatedAt = new Date().toISOString()
     savePosts()
     resetForm()
-    isWriteModalOpen.value = false 
+    isWriteModalOpen.value = false
     if (selectedPost.value && selectedPost.value.id === target.id) {
       selectedPost.value = { ...target }
     }
@@ -100,6 +115,7 @@ function addOrUpdatePost() {
 
   posts.value.unshift(newPost)
   savePosts()
+  currentPage.value = 1
   resetForm()
   isWriteModalOpen.value = false
   alert('게시글이 작성되었습니다.')
@@ -146,6 +162,7 @@ function deletePost() {
 
   posts.value = posts.value.filter(post => post.id !== selectedPost.value.id)
   savePosts()
+  currentPage.value = 1
   closeModal()
   alert('게시글이 삭제되었습니다.')
 }
@@ -347,6 +364,7 @@ function cancelEditComment() {
   editingCommentId.value = null
   editingCommentContent.value = ''
 }
+
 // 글쓰기 모달 열기/닫기
 function openWriteModal() {
   isWriteModalOpen.value = true
@@ -379,8 +397,6 @@ function getCommentTree() {
       브라우저 localStorage에 저장됩니다. 게시글, 댓글, 대댓글은 모두 로컬에 저장됩니다.
     </p>
 
-    
-
     <!-- 게시글 목록 (전체 너비) -->
     <div class="post-list-section">
       <div class="list-header">
@@ -388,7 +404,8 @@ function getCommentTree() {
         <button @click="openWriteModal" class="btn-write">
           📝 글쓰기
         </button>
-      </div> 
+      </div>
+
       <div v-if="posts.length === 0" class="empty-state">
         <p>📌 게시글이 없습니다. 첫 번째 글을 작성해주세요!</p>
       </div>
@@ -401,7 +418,7 @@ function getCommentTree() {
         </div>
 
         <button
-          v-for="post in posts"
+          v-for="post in paginatedPosts"
           :key="post.id"
           @click="openModal(post)"
           class="post-table-row"
@@ -409,6 +426,34 @@ function getCommentTree() {
           <div class="col-author">익명</div>
           <div class="col-title">{{ post.title }}</div>
           <div class="col-date">{{ formatDate(post.createdAt) }}</div>
+        </button>
+      </div>
+
+      <!-- 페이지네이션 -->
+      <div class="pagination">
+        <button
+          @click="currentPage = currentPage - 1"
+          :disabled="currentPage === 1"
+          class="pagination-btn"
+        >
+          ← 이전
+        </button>
+
+        <button
+          v-for="page in totalPages"
+          :key="page"
+          @click="currentPage = page"
+          :class="['pagination-btn', { active: currentPage === page }]"
+        >
+          {{ page }}
+        </button>
+
+        <button
+          @click="currentPage = currentPage + 1"
+          :disabled="currentPage === totalPages"
+          class="pagination-btn"
+        >
+          다음 →
         </button>
       </div>
     </div>
@@ -623,7 +668,8 @@ function getCommentTree() {
         </div>
       </div>
     </Teleport>
-        <!-- 글쓰기 모달 -->
+
+    <!-- 글쓰기 모달 -->
     <Teleport to="body">
       <div v-if="isWriteModalOpen" class="modal-overlay" @click.self="closeWriteModal">
         <div class="modal-container">
@@ -680,17 +726,6 @@ h3 {
   font-size: 0.85rem;
   color: #6b7280;
   margin-bottom: 16px;
-}
-
-/* 글쓰기 폼 */
-.post-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 20px;
-  padding: 12px;
-  background: #f3f4f6;
-  border-radius: 8px;
 }
 
 input,
@@ -771,11 +806,6 @@ button:hover {
 
 .btn-action:hover {
   background: #2563eb;
-}
-
-.form-actions {
-  display: flex;
-  gap: 8px;
 }
 
 /* 목록 섹션 */
@@ -866,6 +896,51 @@ button:hover {
 .empty-state p {
   font-size: 1rem;
   margin: 0;
+}
+
+/* 페이지네이션 */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.pagination-btn {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.pagination-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+  font-weight: 600;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-btn:disabled:hover {
+  background: white;
 }
 
 /* 모달 */
@@ -1155,6 +1230,7 @@ button:hover {
 .empty-comments p {
   margin: 0;
 }
+
 /* 목록 헤더 */
 .list-header {
   display: flex;
@@ -1166,7 +1242,7 @@ button:hover {
 
 .btn-write {
   padding: 10px 16px;
-  background: #7c3aed; /* 보라색 */
+  background: #7c3aed;
   color: white;
   border: none;
   border-radius: 6px;
