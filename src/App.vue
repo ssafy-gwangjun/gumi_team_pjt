@@ -1,22 +1,28 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import Community from './components/community.vue'
+
+import Chatbot from './components/chatbot.vue'
+
 
 const navItems = [
-  { key: 'home', label: '홈' },
-  { key: 'places', label: '관광지 안내' },
-  { key: 'bookmarks', label: '북마크' }
+  { key: 'map', label: '관광 지도 안내' },
+  { key: 'community', label: '익명 커뮤니티' },
+  { key: 'bookmarks', label: '내 저장목록' }
 ]
 
-const currentPage = ref('home')
-const attractions = ref([])
+const currentPage = ref('map')
+const isChatOpen = ref(false)
 const bookmarks = ref([])
 
-const messages = ref([
-  { type: 'bot', text: '구미 여행에 대해 무엇이 궁금하세요?' }
-])
-const newQuestion = ref('')
-const isChatOpen = ref(false)
+const chatQuery = ref('')
+const chatbotRef = ref(null)
+
+function openChatWithQuestion() {
+  const text = chatQuery.value.trim()
+  if (!text) return
+  chatbotRef.value?.openWithQuestion(text)
+  chatQuery.value = ''
+}
 
 function changePage(page) {
   currentPage.value = page
@@ -33,21 +39,6 @@ function toggleBookmark(item) {
   } else {
     bookmarks.value.push({ ...item })
   }
-}
-
-function openChat() { isChatOpen.value = true }
-function closeChat() { isChatOpen.value = false }
-
-function sendMessage() {
-  const text = newQuestion.value.trim()
-  if (!text) return
-  openChat()
-  messages.value.push({ type: 'user', text })
-  messages.value.push({
-    type: 'bot',
-    text: `“${text}”에 대한 정보는 곧 챗봇에서 더 자세히 답변해드릴 수 있어요.`
-  })
-  newQuestion.value = ''
 }
 
 /* localStorage로 북마크 유지 + 초기 JSON 로드 시도 */
@@ -77,13 +68,16 @@ watch(bookmarks, (val) => {
 <template>
   <div class="app-shell">
     <header class="topbar">
-      <h1>구미 여행 가이드</h1>
+      <div>
+        <h1>구미 여행 가이드</h1>
+        <p>현재는 지도 페이지만 정상 확인용으로 연결되어 있습니다.</p>
+      </div>
+
       <nav class="nav">
         <button
           v-for="item in navItems"
           :key="item.key"
-          class="nav-link"
-          :class="{ active: currentPage === item.key }"
+          :class="['nav-link', { active: currentPage === item.key }]"
           @click="changePage(item.key)"
         >
           {{ item.label }}
@@ -101,6 +95,7 @@ watch(bookmarks, (val) => {
             <button type="button" class="secondary" @click="changePage('bookmarks')">북마크 보기</button>
           </div>
         </div>
+        
 
         <div v-else-if="currentPage === 'places'" class="page-section">
           <div class="page-header">
@@ -131,31 +126,12 @@ watch(bookmarks, (val) => {
           </div>
         </div>
 
-        <div v-else-if="currentPage === 'bookmarks'" class="page-section">
-          <div class="page-header">
-            <h2>북마크</h2>
-            <p>나중에 다시 가고 싶은 장소를 모아둘 수 있습니다.</p>
-          </div>
-
-          <div class="card-grid" v-if="bookmarks.length">
-            <article v-for="item in bookmarks" :key="item.id" class="info-card">
-              <div class="card-row">
-                <div>
-                  <h3>{{ item.title }}</h3>
-                  <p>{{ item.description }}</p>
-                  <span class="tag">{{ item.category }}</span>
-                </div>
-
-                <button class="bookmark-btn on" @click="toggleBookmark(item)">★</button>
-              </div>
-            </article>
-          </div>
-
-          <div v-else class="bookmarks-empty">
-            북마크된 항목이 없습니다. 관광지에서 별표를 눌러 저장해보세요.
-          </div>
+        <div v-else-if="currentPage === 'bookmarks'" class="placeholder-panel">
+          <h2>내 저장목록</h2>
+          <p>팀원 개발 중인 북마크 화면 자리입니다.</p>
         </div>
       </section>
+
 <Community />
       <aside class="chat-panel">
         <div class="chat-header">챗봇 질문하기</div>
@@ -171,42 +147,131 @@ watch(bookmarks, (val) => {
         </div>
 
         <div class="chat-input-row">
+
           <input
-            v-model="newQuestion"
-            @keyup.enter="sendMessage"
-            placeholder="질문을 입력해 주세요"
+            v-model="chatQuery"
+            @keyup.enter="openChatWithQuestion"
+            placeholder="질문을 입력하면 챗봇이 열립니다"
           />
-          <button @click="sendMessage">전송</button>
+          <button @click="openChatWithQuestion">챗봇으로 이동</button>
         </div>
-      </aside>
+      </section>
     </main>
-
-    <div v-if="isChatOpen" class="chat-popup">
-      <div class="chat-popup-header">
-        <strong>구미 여행 챗봇</strong>
-        <button class="close-btn" @click="closeChat">✕</button>
-      </div>
-
-      <div class="chat-popup-messages">
-        <div
-          v-for="(message, index) in messages"
-          :key="index"
-          :class="['message', message.type]"
-        >
-          {{ message.text }}
-        </div>
-      </div>
-
-      <div class="chat-popup-input">
-        <input
-          v-model="newQuestion"
-          @keyup.enter="sendMessage"
-          placeholder="질문을 입력해 주세요"
-        />
-        <button @click="sendMessage">전송</button>
-      </div>
-    </div>
-
-    <button class="floating-chat" aria-label="챗봇 열기" @click="openChat">💬</button>
+  
+   <Chatbot ref="chatbotRef" />
   </div>
 </template>
+
+<style scoped>
+.app-shell {
+  min-height: 100vh;
+  background: #f3f6fb;
+  padding: 1rem;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.08);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.topbar p {
+  margin: 0.35rem 0 0;
+  color: #6b7280;
+}
+
+.nav {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.nav-link {
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: #eff6ff;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+
+.nav-link.active {
+  background: #1d4ed8;
+  color: #fff;
+  border-color: #1d4ed8;
+}
+
+.main-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.content-panel {
+  min-height: calc(100vh - 160px);
+}
+
+.placeholder-panel {
+  background: #fff;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+  text-align: center;
+  color: #475569;
+}
+
+.floating-chat {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 1.4rem;
+  cursor: pointer;
+  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.18);
+}
+
+.chat-popup {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 5.5rem;
+  width: min(360px, calc(100vw - 2.5rem));
+  background: #fff;
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+}
+
+.chat-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.chat-popup-body {
+  padding: 1rem;
+  color: #334155;
+}
+.close-btn {
+  border: none;
+  background: transparent;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+</style>
