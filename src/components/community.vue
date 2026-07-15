@@ -11,9 +11,43 @@ const passwordInputs = ref({})
 const commentForms = ref({})
 const replyForms = ref({})
 const commentPasswordInputs = ref({})
-const replyPasswordInputs = ref({})
-const editingTarget = ref(null)
-const editDraft = ref('')
+const replyingToCommentId = ref(null)
+const editingCommentTarget = ref(null)
+const editingCommentDraft = ref('')
+
+function normalizeComments(comments = []) {
+  const result = []
+
+  for (const comment of Array.isArray(comments) ? comments : []) {
+    const baseComment = {
+      id: comment.id ?? Date.now() + Math.random(),
+      author: comment.author ?? '익명',
+      content: comment.content ?? '',
+      password: comment.password ?? '',
+      createdAt: comment.createdAt || new Date().toISOString(),
+      updatedAt: comment.updatedAt || comment.createdAt || new Date().toISOString(),
+      parentId: comment.parentId ?? null
+    }
+
+    result.push(baseComment)
+
+    if (Array.isArray(comment.replies)) {
+      for (const reply of comment.replies) {
+        result.push({
+          id: reply.id ?? Date.now() + Math.random(),
+          author: reply.author ?? '익명',
+          content: reply.content ?? '',
+          password: reply.password ?? '',
+          createdAt: reply.createdAt || new Date().toISOString(),
+          updatedAt: reply.updatedAt || reply.createdAt || new Date().toISOString(),
+          parentId: baseComment.id
+        })
+      }
+    }
+  }
+
+  return result
+}
 
 onMounted(() => {
   const saved = localStorage.getItem(STORAGE_KEY)
@@ -22,10 +56,7 @@ onMounted(() => {
       const parsed = JSON.parse(saved)
       posts.value = parsed.map(post => ({
         ...post,
-        comments: (post.comments || []).map(comment => ({
-          ...comment,
-          replies: (comment.replies || []).map(reply => ({ ...reply }))
-        })),
+        comments: normalizeComments(post.comments),
         createdAt: post.createdAt || new Date().toISOString(),
         updatedAt: post.updatedAt || post.createdAt || new Date().toISOString()
       }))
@@ -61,17 +92,28 @@ function selectPost(post) {
 
 function getCommentForm(postId) {
   if (!commentForms.value[postId]) {
-    commentForms.value[postId] = { content: '', password: '' }
+    commentForms.value[postId] = { author: '', content: '', password: '' }
   }
   return commentForms.value[postId]
 }
 
-function getReplyForm(postId, commentId) {
-  const key = `${postId}-${commentId}`
-  if (!replyForms.value[key]) {
-    replyForms.value[key] = { content: '', password: '' }
+function getReplyForm(commentId) {
+  if (!replyForms.value[commentId]) {
+    replyForms.value[commentId] = { author: '', content: '', password: '' }
   }
-  return replyForms.value[key]
+  return replyForms.value[commentId]
+}
+
+function getCommentTree(post) {
+  if (!post) return []
+
+  const comments = Array.isArray(post.comments) ? post.comments : []
+  return comments
+    .filter(comment => comment.parentId === null)
+    .map(comment => ({
+      ...comment,
+      replies: comments.filter(reply => reply.parentId === comment.id)
+    }))
 }
 
 function addOrUpdatePost() {
@@ -171,11 +213,12 @@ function deletePost(post) {
 
 function addComment(postId) {
   const formData = getCommentForm(postId)
+  const author = formData.author.trim()
   const content = formData.content.trim()
   const password = formData.password.trim()
 
-  if (!content || !password) {
-    alert('댓글 내용과 비밀번호를 모두 입력해주세요.')
+  if (!author || !content || !password) {
+    alert('작성자, 내용, 비밀번호를 모두 입력해주세요.')
     return
   }
 
@@ -185,189 +228,162 @@ function addComment(postId) {
   post.comments = post.comments || []
   post.comments.unshift({
     id: Date.now() + Math.random(),
+    author,
     content,
     password,
+    parentId: null,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    replies: []
+    updatedAt: new Date().toISOString()
   })
 
   savePosts()
+  formData.author = ''
   formData.content = ''
   formData.password = ''
 }
 
-function addReply(postId, commentId) {
-  const formData = getReplyForm(postId, commentId)
+function toggleReplyForm(commentId) {
+  replyingToCommentId.value = replyingToCommentId.value === commentId ? null : commentId
+}
+
+function addReply(postId, parentCommentId) {
+  const formData = getReplyForm(parentCommentId)
+  const author = formData.author.trim()
   const content = formData.content.trim()
   const password = formData.password.trim()
 
-  if (!content || !password) {
-    alert('대댓글 내용과 비밀번호를 모두 입력해주세요.')
+  if (!author || !content || !password) {
+    alert('작성자, 내용, 비밀번호를 모두 입력해주세요.')
     return
   }
 
   const post = posts.value.find(item => item.id === postId)
   if (!post) return
 
-  const comment = (post.comments || []).find(item => item.id === commentId)
-  if (!comment) return
+  const parentComment = (post.comments || []).find(item => item.id === parentCommentId)
+  if (!parentComment) return
 
-  comment.replies = comment.replies || []
-  comment.replies.push({
+  if (parentComment.parentId !== null) {
+    alert('대댓글에는 다시 대댓글을 달 수 없습니다.')
+    return
+  }
+
+  post.comments = post.comments || []
+  post.comments.push({
     id: Date.now() + Math.random(),
+    author,
     content,
     password,
+    parentId: parentCommentId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   })
 
   savePosts()
+  formData.author = ''
   formData.content = ''
   formData.password = ''
+  replyingToCommentId.value = null
 }
 
-function findCommentTarget(postId, commentId, replyId = null) {
+function startEditComment(postId, commentId) {
   const post = posts.value.find(item => item.id === postId)
-  if (!post) return null
+  if (!post) return
 
   const comment = (post.comments || []).find(item => item.id === commentId)
-  if (!comment) return null
+  if (!comment) return
 
-  if (replyId) {
-    const reply = (comment.replies || []).find(item => item.id === replyId)
-    if (!reply) return null
-    return { post, comment, reply, target: reply }
-  }
-
-  return { post, comment, target: comment }
-}
-
-function startEditComment(postId, commentId, replyId = null) {
-  const targetInfo = findCommentTarget(postId, commentId, replyId)
-  if (!targetInfo) return
-
-  const key = replyId
-    ? `${postId}-${commentId}-${replyId}`
-    : `${postId}-${commentId}`
-
-  const enteredPassword = (replyId
-    ? replyPasswordInputs.value[key]
-    : commentPasswordInputs.value[key] || ''
-  ).trim()
+  const key = `${postId}-${commentId}`
+  const enteredPassword = (commentPasswordInputs.value[key] || '').trim()
 
   if (!enteredPassword) {
     alert('비밀번호를 먼저 입력하세요.')
     return
   }
 
-  if (targetInfo.target.password !== enteredPassword) {
+  if (comment.password !== enteredPassword) {
     alert('비밀번호가 일치하지 않습니다.')
-    if (replyId) {
-      replyPasswordInputs.value[key] = ''
-    } else {
-      commentPasswordInputs.value[key] = ''
-    }
+    commentPasswordInputs.value[key] = ''
     return
   }
 
-  editingTarget.value = {
-    postId,
-    commentId,
-    replyId,
-    type: replyId ? 'reply' : 'comment'
-  }
-  editDraft.value = targetInfo.target.content
+  editingCommentTarget.value = { postId, commentId }
+  editingCommentDraft.value = comment.content
+  commentPasswordInputs.value[key] = ''
 }
 
-function saveEditedComment() {
-  if (!editingTarget.value) return
+function saveEditComment() {
+  if (!editingCommentTarget.value) return
 
-  const { postId, commentId, replyId } = editingTarget.value
-  const targetInfo = findCommentTarget(postId, commentId, replyId)
+  const { postId, commentId } = editingCommentTarget.value
+  const post = posts.value.find(item => item.id === postId)
+  if (!post) return
 
-  if (!targetInfo) return
+  const comment = (post.comments || []).find(item => item.id === commentId)
+  if (!comment) return
 
-  const content = editDraft.value.trim()
+  const content = editingCommentDraft.value.trim()
   if (!content) {
     alert('내용을 입력해주세요.')
     return
   }
 
-  targetInfo.target.content = content
-  targetInfo.target.updatedAt = new Date().toISOString()
+  comment.content = content
+  comment.updatedAt = new Date().toISOString()
   savePosts()
 
-  editingTarget.value = null
-  editDraft.value = ''
+  editingCommentTarget.value = null
+  editingCommentDraft.value = ''
 }
 
 function cancelEditComment() {
-  editingTarget.value = null
-  editDraft.value = ''
+  editingCommentTarget.value = null
+  editingCommentDraft.value = ''
 }
 
-function deleteComment(postId, commentId, replyId = null) {
-  const targetInfo = findCommentTarget(postId, commentId, replyId)
-  if (!targetInfo) return
+function deleteComment(postId, commentId) {
+  const post = posts.value.find(item => item.id === postId)
+  if (!post) return
 
-  const key = replyId
-    ? `${postId}-${commentId}-${replyId}`
-    : `${postId}-${commentId}`
+  const comment = (post.comments || []).find(item => item.id === commentId)
+  if (!comment) return
 
-  const enteredPassword = (replyId
-    ? replyPasswordInputs.value[key]
-    : commentPasswordInputs.value[key] || ''
-  ).trim()
+  const key = `${postId}-${commentId}`
+  const enteredPassword = (commentPasswordInputs.value[key] || '').trim()
 
   if (!enteredPassword) {
     alert('비밀번호를 먼저 입력하세요.')
     return
   }
 
-  if (targetInfo.target.password !== enteredPassword) {
+  if (comment.password !== enteredPassword) {
     alert('비밀번호가 일치하지 않습니다.')
-    if (replyId) {
-      replyPasswordInputs.value[key] = ''
-    } else {
-      commentPasswordInputs.value[key] = ''
-    }
+    commentPasswordInputs.value[key] = ''
     return
   }
 
-  if (replyId) {
-    targetInfo.comment.replies = (targetInfo.comment.replies || []).filter(item => item.id !== replyId)
-  } else {
-    targetInfo.post.comments = (targetInfo.post.comments || []).filter(item => item.id !== commentId)
-  }
-
+  post.comments = (post.comments || []).filter(item => item.id !== commentId)
   savePosts()
 
-  if (replyId) {
-    delete replyPasswordInputs.value[key]
-  } else {
-    delete commentPasswordInputs.value[key]
-  }
+  delete commentPasswordInputs.value[key]
 
   if (
-    editingTarget.value &&
-    editingTarget.value.postId === postId &&
-    editingTarget.value.commentId === commentId &&
-    editingTarget.value.replyId === replyId
+    editingCommentTarget.value &&
+    editingCommentTarget.value.postId === postId &&
+    editingCommentTarget.value.commentId === commentId
   ) {
-    editingTarget.value = null
-    editDraft.value = ''
+    editingCommentTarget.value = null
+    editingCommentDraft.value = ''
   }
 
-  alert('삭제되었습니다.')
+  alert('댓글이 삭제되었습니다.')
 }
 
-function isEditingTarget(postId, commentId, replyId = null) {
+function isEditingComment(postId, commentId) {
   return (
-    editingTarget.value &&
-    editingTarget.value.postId === postId &&
-    editingTarget.value.commentId === commentId &&
-    editingTarget.value.replyId === replyId
+    editingCommentTarget.value &&
+    editingCommentTarget.value.postId === postId &&
+    editingCommentTarget.value.commentId === commentId
   )
 }
 </script>
@@ -376,7 +392,7 @@ function isEditingTarget(postId, commentId, replyId = null) {
   <section class="card">
     <h3>📝 익명 커뮤니티</h3>
     <p class="hint">
-      브라우저 localStorage에 저장됩니다. 수정/삭제는 비밀번호 확인 후 가능합니다.
+      브라우저 localStorage에 저장됩니다. 게시글, 댓글, 대댓글은 모두 로컬에 저장됩니다.
     </p>
 
     <form @submit.prevent="addOrUpdatePost" class="post-form">
@@ -428,6 +444,10 @@ function isEditingTarget(postId, commentId, replyId = null) {
 
       <div class="comment-form">
         <h5>댓글 작성</h5>
+        <input
+          v-model="getCommentForm(selectedPost.id).author"
+          placeholder="작성자 이름"
+        />
         <textarea
           v-model="getCommentForm(selectedPost.id).content"
           placeholder="댓글 내용을 입력하세요"
@@ -440,67 +460,94 @@ function isEditingTarget(postId, commentId, replyId = null) {
         <button type="button" @click="addComment(selectedPost.id)">댓글 작성</button>
       </div>
 
-      <div v-if="(selectedPost.comments || []).length" class="comment-list">
-        <div v-for="comment in selectedPost.comments || []" :key="comment.id" class="comment-item">
-          <p class="comment-content">{{ comment.content }}</p>
-
-          <div class="comment-actions">
-            <input
-              :value="commentPasswordInputs[`${selectedPost.id}-${comment.id}`] || ''"
-              @input="commentPasswordInputs[`${selectedPost.id}-${comment.id}`] = $event.target.value"
-              type="password"
-              placeholder="비밀번호"
-              class="password-input"
-            />
-            <button type="button" @click="startEditComment(selectedPost.id, comment.id)">수정</button>
-            <button type="button" @click="deleteComment(selectedPost.id, comment.id)">삭제</button>
-          </div>
-
-          <div v-if="isEditingTarget(selectedPost.id, comment.id, null)" class="edit-box">
-            <textarea v-model="editDraft"></textarea>
-            <div class="form-actions">
-              <button type="button" @click="saveEditedComment">수정 완료</button>
-              <button type="button" @click="cancelEditComment">취소</button>
+      <div v-if="getCommentTree(selectedPost).length" class="comment-list">
+        <div
+          v-for="comment in getCommentTree(selectedPost)"
+          :key="comment.id"
+          class="comment-item"
+        >
+          <div class="comment-card">
+            <div class="comment-header">
+              <strong>{{ comment.author }}</strong>
+              <span>{{ formatDate(comment.createdAt) }}</span>
             </div>
-          </div>
 
-          <div class="reply-list">
-            <div v-for="reply in comment.replies || []" :key="reply.id" class="reply-item">
-              <p class="reply-content">{{ reply.content }}</p>
+            <p class="comment-content">{{ comment.content }}</p>
 
-              <div class="comment-actions">
-                <input
-                  :value="replyPasswordInputs[`${selectedPost.id}-${comment.id}-${reply.id}`] || ''"
-                  @input="replyPasswordInputs[`${selectedPost.id}-${comment.id}-${reply.id}`] = $event.target.value"
-                  type="password"
-                  placeholder="비밀번호"
-                  class="password-input"
-                />
-                <button type="button" @click="startEditComment(selectedPost.id, comment.id, reply.id)">수정</button>
-                <button type="button" @click="deleteComment(selectedPost.id, comment.id, reply.id)">삭제</button>
+            <div class="comment-actions">
+              <input
+                :value="commentPasswordInputs[`${selectedPost.id}-${comment.id}`] || ''"
+                @input="commentPasswordInputs[`${selectedPost.id}-${comment.id}`] = $event.target.value"
+                type="password"
+                placeholder="비밀번호"
+                class="password-input"
+              />
+              <button type="button" @click="startEditComment(selectedPost.id, comment.id)">수정</button>
+              <button type="button" @click="deleteComment(selectedPost.id, comment.id)">삭제</button>
+              <button type="button" @click="toggleReplyForm(comment.id)">대댓글</button>
+            </div>
+
+            <div v-if="replyingToCommentId === comment.id" class="reply-form">
+              <input
+                v-model="getReplyForm(comment.id).author"
+                placeholder="작성자 이름"
+              />
+              <textarea
+                v-model="getReplyForm(comment.id).content"
+                placeholder="대댓글 내용을 입력하세요"
+              ></textarea>
+              <input
+                v-model="getReplyForm(comment.id).password"
+                type="password"
+                placeholder="대댓글 비밀번호"
+              />
+              <button type="button" @click="addReply(selectedPost.id, comment.id)">대댓글 등록</button>
+            </div>
+
+            <div v-if="isEditingComment(selectedPost.id, comment.id)" class="edit-box">
+              <textarea v-model="editingCommentDraft"></textarea>
+              <div class="form-actions">
+                <button type="button" @click="saveEditComment">수정 완료</button>
+                <button type="button" @click="cancelEditComment">취소</button>
               </div>
+            </div>
 
-              <div v-if="isEditingTarget(selectedPost.id, comment.id, reply.id)" class="edit-box">
-                <textarea v-model="editDraft"></textarea>
-                <div class="form-actions">
-                  <button type="button" @click="saveEditedComment">수정 완료</button>
-                  <button type="button" @click="cancelEditComment">취소</button>
+            <div v-if="comment.replies && comment.replies.length" class="reply-list">
+              <div
+                v-for="reply in comment.replies"
+                :key="reply.id"
+                class="comment-item reply-item"
+              >
+                <div class="comment-card">
+                  <div class="comment-header">
+                    <strong>{{ reply.author }}</strong>
+                    <span>{{ formatDate(reply.createdAt) }}</span>
+                  </div>
+
+                  <p class="comment-content">{{ reply.content }}</p>
+
+                  <div class="comment-actions">
+                    <input
+                      :value="commentPasswordInputs[`${selectedPost.id}-${reply.id}`] || ''"
+                      @input="commentPasswordInputs[`${selectedPost.id}-${reply.id}`] = $event.target.value"
+                      type="password"
+                      placeholder="비밀번호"
+                      class="password-input"
+                    />
+                    <button type="button" @click="startEditComment(selectedPost.id, reply.id)">수정</button>
+                    <button type="button" @click="deleteComment(selectedPost.id, reply.id)">삭제</button>
+                  </div>
+
+                  <div v-if="isEditingComment(selectedPost.id, reply.id)" class="edit-box">
+                    <textarea v-model="editingCommentDraft"></textarea>
+                    <div class="form-actions">
+                      <button type="button" @click="saveEditComment">수정 완료</button>
+                      <button type="button" @click="cancelEditComment">취소</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-
-          <div class="reply-form">
-            <textarea
-              v-model="getReplyForm(selectedPost.id, comment.id).content"
-              placeholder="대댓글 내용을 입력하세요"
-            ></textarea>
-            <input
-              v-model="getReplyForm(selectedPost.id, comment.id).password"
-              type="password"
-              placeholder="대댓글 비밀번호"
-            />
-            <button type="button" @click="addReply(selectedPost.id, comment.id)">대댓글 작성</button>
           </div>
         </div>
       </div>
@@ -564,11 +611,15 @@ textarea {
 }
 
 .post-item,
-.comment-item,
-.reply-item {
+.comment-item {
   background: #f9fafb;
   padding: 10px;
   border-radius: 8px;
+}
+
+.reply-item {
+  margin-left: 20px;
+  background: #f5f7fa;
 }
 
 .post-title-btn {
@@ -581,8 +632,7 @@ textarea {
 }
 
 .post-content,
-.comment-content,
-.reply-content {
+.comment-content {
   margin: 6px 0;
   white-space: pre-wrap;
 }
@@ -612,5 +662,20 @@ textarea {
 
 .password-input {
   min-width: 120px;
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 0.95rem;
+}
+
+.edit-box {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 </style>
