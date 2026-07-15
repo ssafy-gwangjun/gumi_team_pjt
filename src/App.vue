@@ -1,5 +1,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import Chatbot from './components/chatbot.vue'
+
 
 const navItems = [
   { key: 'home', label: '홈' },
@@ -11,11 +13,15 @@ const currentPage = ref('home')
 const attractions = ref([])
 const bookmarks = ref([])
 
-const messages = ref([
-  { type: 'bot', text: '구미 여행에 대해 무엇이 궁금하세요?' }
-])
-const newQuestion = ref('')
-const isChatOpen = ref(false)
+const chatQuery = ref('')
+const chatbotRef = ref(null)
+
+function openChatWithQuestion() {
+  const text = chatQuery.value.trim()
+  if (!text) return
+  chatbotRef.value?.openWithQuestion(text)
+  chatQuery.value = ''
+}
 
 function changePage(page) {
   currentPage.value = page
@@ -32,21 +38,6 @@ function toggleBookmark(item) {
   } else {
     bookmarks.value.push({ ...item })
   }
-}
-
-function openChat() { isChatOpen.value = true }
-function closeChat() { isChatOpen.value = false }
-
-function sendMessage() {
-  const text = newQuestion.value.trim()
-  if (!text) return
-  openChat()
-  messages.value.push({ type: 'user', text })
-  messages.value.push({
-    type: 'bot',
-    text: `“${text}”에 대한 정보는 곧 챗봇에서 더 자세히 답변해드릴 수 있어요.`
-  })
-  newQuestion.value = ''
 }
 
 /* localStorage로 북마크 유지 + 초기 JSON 로드 시도 */
@@ -100,6 +91,7 @@ watch(bookmarks, (val) => {
             <button type="button" class="secondary" @click="changePage('bookmarks')">북마크 보기</button>
           </div>
         </div>
+        
 
         <div v-else-if="currentPage === 'places'" class="page-section">
           <div class="page-header">
@@ -156,56 +148,19 @@ watch(bookmarks, (val) => {
         </div>
       </section>
 
-      <aside class="chat-panel">
-        <div class="chat-header">챗봇 질문하기</div>
-
-        <div class="chat-messages">
-          <div
-            v-for="(message, index) in messages"
-            :key="index"
-            :class="['message', message.type]"
-          >
-            {{ message.text }}
-          </div>
-        </div>
-
-        <div class="chat-input-row">
+    <section class="chat-launcher">
+        <h2>챗봇에게 궁금한 점을 물어보세요</h2>
+        <div class="chat-launcher-row">
           <input
-            v-model="newQuestion"
-            @keyup.enter="sendMessage"
-            placeholder="질문을 입력해 주세요"
+            v-model="chatQuery"
+            @keyup.enter="openChatWithQuestion"
+            placeholder="질문을 입력하면 챗봇이 열립니다"
           />
-          <button @click="sendMessage">전송</button>
+          <button @click="openChatWithQuestion">챗봇으로 이동</button>
         </div>
-      </aside>
+      </section>
     </main>
-
-    <div v-if="isChatOpen" class="chat-popup">
-      <div class="chat-popup-header">
-        <strong>구미 여행 챗봇</strong>
-        <button class="close-btn" @click="closeChat">✕</button>
-      </div>
-
-      <div class="chat-popup-messages">
-        <div
-          v-for="(message, index) in messages"
-          :key="index"
-          :class="['message', message.type]"
-        >
-          {{ message.text }}
-        </div>
-      </div>
-
-      <div class="chat-popup-input">
-        <input
-          v-model="newQuestion"
-          @keyup.enter="sendMessage"
-          placeholder="질문을 입력해 주세요"
-        />
-        <button @click="sendMessage">전송</button>
-      </div>
-    </div>
-
-    <button class="floating-chat" aria-label="챗봇 열기" @click="openChat">💬</button>
+  
+   <Chatbot ref="chatbotRef" />
   </div>
 </template>
