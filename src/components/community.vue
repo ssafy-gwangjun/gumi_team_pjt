@@ -61,6 +61,8 @@ function formatDate(value) {
 }
 
 
+
+
 // 게시글 추가/수정
 function addOrUpdatePost() {
   const title = form.value.title.trim()
@@ -85,12 +87,14 @@ function addOrUpdatePost() {
     target.content = content
     target.updatedAt = new Date().toISOString()
     savePosts()
-    resetForm()
-    isWriteModalOpen.value = false
+    closeWriteModal()
     if (selectedPost.value && selectedPost.value.id === target.id) {
       selectedPost.value = { ...target }
     }
-    alert('게시글이 수정되었습니다.')
+
+    setTimeout(() => {
+      alert('게시글이 수정되었습니다.')
+    }, 50)
     return
   }
 
@@ -107,9 +111,12 @@ function addOrUpdatePost() {
   posts.value.unshift(newPost)
   savePosts()
   currentPage.value = 1
-  resetForm()
-  isWriteModalOpen.value = false
-  alert('게시글이 작성되었습니다.')
+
+  closeWriteModal()
+
+  setTimeout(() => {
+    alert('게시글이 작성되었습니다.')
+  }, 50)
 }
 
 // 게시글 수정 시작
@@ -133,7 +140,9 @@ function startEditPost() {
   form.value.content = selectedPost.value.content
   form.value.password = enteredPassword
   closeModal()
-  isWriteModalOpen.value = true
+  setTimeout(() => {
+    isWriteModalOpen.value = true
+  }, 100)
 }
 
 // 게시글 삭제
@@ -388,6 +397,11 @@ function openWriteModal() {
 function closeWriteModal() {
   isWriteModalOpen.value = false
   resetForm()
+
+  // 현재 활성화된(포커스된) 입력창이나 버튼이 있다면 포커스를 강제로 해제합니다.
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
 }
 
 // 검색 처리
@@ -1382,4 +1396,59 @@ button:hover {
 .search-btn:active {
   transform: scale(0.98);
 }
+
+/* 테이블 행 기본 구조 설정 */
+.post-table-header,
+.post-table-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  text-align: left;
+  background: none;
+  border-left: none;
+  border-right: none;
+  cursor: pointer;
+}
+
+.post-table-header {
+  font-weight: bold;
+  color: #555555;
+  background-color: #fafafa;
+  cursor: default;
+}
+
+/* 1. 작성자 칸 가로 폭 비율 (좁게) */
+.col-author {
+  width: 15%;
+  flex-shrink: 0;
+  color: #333;
+}
+
+/* 2. 제목 칸 가로 폭 비율 (넓게 채우기, 길면 말줄임) */
+.col-title {
+  flex: 1; /* 남은 여백을 제목이 다 차지합니다 */
+  min-width: 0; /* 말줄임 작동용 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 15px; /* 날짜와 너무 붙지 않게 여백 */
+  color: #333;
+}
+
+/* 3. 작성일 칸 가로 폭 비율 (적당하게 우측 정렬) */
+.col-date {
+  width: 25%;
+  flex-shrink: 0;
+  text-align: right; /* 날짜는 우측 정렬되어 깔끔하게 보입니다 */
+  color: #888888; /* 약간 흐린 회색으로 가독성 향상 */
+  font-size: 0.9rem;
+}
+
+/* 마우스 올렸을 때 효과 */
+.post-table-row:hover {
+  background-color: #f7f9fc;
+}
+
 </style>
