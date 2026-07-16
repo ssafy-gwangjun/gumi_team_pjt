@@ -98,11 +98,11 @@ watch(likes, (val) => {
       <div class="brand-panel">
        
         <img 
-          src="@/assets/logo-character.png" 
+          src="./assets/logo-character.png" 
           alt="구미 관광 가이드 로고" 
           class="brand-mark-img" 
         />
-        <div>
+        <div class="brand-text-content">
           <p class="eyebrow">LocalHub Gumi</p>
           <h1>구미 관광 가이드</h1>
           <p class="brand-desc">
@@ -173,11 +173,12 @@ watch(likes, (val) => {
 
 .brand-panel {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
+  align-items: center; /* 세로 기준 중앙 정렬 */
+  gap: 0.2rem;         /* 이미지와 글씨 사이의 여백 */
   flex: 1;
   min-width: 0;
+  margin-left: -0.3rem;
+  /* flex-wrap: wrap; 을 제거하면 모바일에서도 이미지와 텍스트가 나란히 예쁘게 유지됩니다 */
 }
 
 .page-nav {
@@ -189,17 +190,18 @@ watch(likes, (val) => {
   flex-shrink: 0;
 }
 
-.brand-mark {
-  width: 58px;
-  height: 58px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.2);
-  display: grid;
-  place-items: center;
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: white;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+/* 2. [기존 .brand-mark를 대체] : 새 이미지 클래스로 변경 */
+.brand-mark-img {
+  width: 100px;         /* 기존 동그라미(58px) 크기와 동일하게 지정 */
+  height: 100px;
+  border-radius: 18px; /* 기존 모서리 둥글기 값 유지 */
+  object-fit: contain; /* 이미지 비율 유지 */
+  flex-shrink: 0;      /* 화면이 좁아져도 이미지가 찌그러지지 않도록 방지 */
+}
+
+.brand-text-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .eyebrow {
@@ -213,7 +215,7 @@ watch(likes, (val) => {
 .brand-desc {
   margin: 0.35rem 0 0;
   font-size: 0.99rem;
-  max-width: 740px;
+  max-width: none;
   line-height: 1.65;
   opacity: 0.92;
 }
