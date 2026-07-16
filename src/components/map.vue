@@ -13,9 +13,21 @@
     <div class="map-grid">
       <div class="map-panel">
         <div class="filter-bar">
-          <div class="filter-group">
+          <div class="filter-group filter-group-primary">
             <button
-              v-for="type in contentTypes"
+              v-for="type in primaryContentTypes"
+              :key="type.id"
+              @click="setContentType(type.id)"
+              :class="['filter-pill', { active: type.id === contentTypeId }]"
+            >
+              <span class="pill-icon">{{ filterIcons[type.id] }}</span>
+              {{ type.label }}
+            </button>
+          </div>
+
+          <div v-if="secondaryContentTypes.length" class="filter-group filter-group-scroll">
+            <button
+              v-for="type in secondaryContentTypes"
               :key="type.id"
               @click="setContentType(type.id)"
               :class="['filter-pill', { active: type.id === contentTypeId }]"
@@ -146,6 +158,14 @@ const contentTypes = [
   { id: '39', label: '음식점' }
 ]
 
+const primaryContentTypes = computed(() =>
+  contentTypes.filter(type => ['all', '12', '15', '39'].includes(type.id))
+)
+
+const secondaryContentTypes = computed(() =>
+  contentTypes.filter(type => !['all', '12', '15', '39'].includes(type.id))
+)
+
 const filterIcons = {
   all: '🌐',
   '12': '📍',
@@ -224,7 +244,7 @@ const createMarkerIcon = (typeId) => {
     iconAnchor: [14, 42],
     popupAnchor: [0, -36]
   })
-} 
+}
 
 const loadFile = async (fileName) => {
   const res = await fetch(`/data/${fileName}`)
@@ -423,11 +443,34 @@ watch(filteredPlaces, updateMarkers)
 
 .filter-group {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.filter-group-primary {
+  margin-bottom: 0.25rem;
+}
+
+.filter-group-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.filter-group-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.filter-group-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
 }
 
 .filter-pill {
+  flex: 0 0 auto;
   border: 1px solid transparent;
   border-radius: 999px;
   padding: 0.85rem 1rem;
@@ -648,11 +691,13 @@ watch(filteredPlaces, updateMarkers)
   border: 2px solid white;
   box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.06), 0 4px 10px rgba(15, 23, 42, 0.16);
 }
+
 @media (max-width: 1200px) {
   .map-grid {
     grid-template-columns: 1fr;
   }
 }
+
 @media (max-width: 860px) {
   .page-hero {
     flex-direction: column;

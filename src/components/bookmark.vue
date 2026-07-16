@@ -103,7 +103,7 @@ const placeholderImage = 'https://via.placeholder.com/240x160?text=No+Image'
 
 .bookmark-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 }
 
@@ -126,7 +126,7 @@ const placeholderImage = 'https://via.placeholder.com/240x160?text=No+Image'
 
 .bookmark-card {
   display: grid;
-  grid-template-columns: 100px 1fr auto;
+  grid-template-columns: 100px minmax(0, 1fr) auto;
   gap: 1rem;
   padding: 1rem;
   border-radius: 16px;
@@ -140,6 +140,10 @@ const placeholderImage = 'https://via.placeholder.com/240x160?text=No+Image'
   height: 80px;
   object-fit: cover;
   border-radius: 14px;
+}
+
+.bookmark-info {
+  min-width: 0;
 }
 
 .bookmark-info h4 {
@@ -167,5 +171,27 @@ const placeholderImage = 'https://via.placeholder.com/240x160?text=No+Image'
 .empty-state {
   padding: 1rem;
   color: #6b7280;
+}
+
+@media (max-width: 900px) {
+  .bookmark-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .bookmark-card {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .bookmark-card img {
+    width: 100%;
+    height: 140px;
+  }
+
+  .button {
+    width: 100%;
+  }
 }
 </style>
