@@ -181,6 +181,28 @@ function closeModal() {
   replyForms.value = {}
 }
 
+// 검색 필터링된 게시글
+const filteredPosts = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase()
+  if (!query) return posts.value
+  return posts.value.filter(post =>
+    post.title.toLowerCase().includes(query) ||
+    post.content.toLowerCase().includes(query)
+  )
+})
+
+// 전체 페이지 수
+const totalPages = computed(() => {
+  return Math.max(1, Math.ceil(filteredPosts.value.length / itemsPerPage.value))
+})
+
+// 현재 페이지에 보여줄 게시글
+const paginatedPosts = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return filteredPosts.value.slice(start, end)
+})
+
 // 댓글 추가
 function addComment() {
   if (!selectedPost.value) return
@@ -416,7 +438,7 @@ function getCommentTree() {
         </button>
       </div>
 
-      <div v-if="posts.length === 0" class="empty-state">
+      <div v-if="filteredPosts.length === 0" class="empty-state">
         <p>📌 게시글이 없습니다. 첫 번째 글을 작성해주세요!</p>
       </div>
 
