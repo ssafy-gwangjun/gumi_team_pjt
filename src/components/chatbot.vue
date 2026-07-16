@@ -103,9 +103,9 @@ onMounted(async () => {
 // OpenAI 공통 호출 헬퍼
 // =====================================================
 
-async function callOpenAI({ system, user, history = [], json = false }) {
+async function callOpenAI({ system, user, history = [], json = false, model = "gpt-5-mini" }) {
   const body = {
-    model: "gpt-5-mini",
+    model,
     messages: [
       { role: "system", content: system },
       ...history,
@@ -198,6 +198,7 @@ async function analyzeQuestion(question, historyForLLM) {
     user: question,
     history: historyForLLM,
     json: true,
+    model: "gpt-5-mini",
   });
 
   try {
@@ -262,7 +263,7 @@ function searchRegion(intent) {
 
   if (keywords.length === 0) {
     // 키워드가 없으면(아주 포괄적인 추천 요청) 카테고리 내에서 랜덤 샘플링
-    return shuffle(pool).slice(0, 5);
+    return shuffle(pool).slice(0, 3);
   }
 
   const scored = pool
@@ -276,7 +277,7 @@ function searchRegion(intent) {
   // 키워드 매칭 결과가 없으면, 최소한 카테고리 안에서라도 몇 개 보여준다
   const finalList = scored.length > 0 ? scored : pool.map((item) => ({ item, score: 0, matched: [] }));
 
-  return finalList.slice(0, 5).map((x) => ({ ...x.item, _matchedKeywords: x.matched }));
+  return finalList.slice(0, 3).map((x) => ({ ...x.item, _matchedKeywords: x.matched }));
 }
 
 // =====================================================
@@ -285,9 +286,9 @@ function searchRegion(intent) {
 
 const QUERY_TYPE_GUIDE = {
   recommend:
-    "장소/행사 이름에서 유추되는 특징(예: '구미라면 축제'라면 라면을 주제로 한 축제)을 자연스럽게 짚어주며 소개해. 질문자가 원한 조건(아이와 함께 등)에 실제로 맞는지 데이터로 확인할 수 없다면, 단정하지 말고 '이름으로 보면 ~한 느낌이에요' 정도로 부드럽게 표현해.",
+    "각 장소는 이름에서 느껴지는 테마를 짧은 명사구로 자신있게 끝맺어줘. 예: '중화요리 전문점.', '강변을 따라 걷기 좋은 공원.', '카페형 음식점.' 처럼. '이름으로 보면', '~일 가능성이 있어요' 같은 헤징 표현은 쓰지 마.",
   schedule:
-    "이 데이터에는 정확한 날짜·기간 정보가 없다는 걸 먼저 자연스럽게 알려줘. 그 대신 전화번호가 있으면 '정확한 일정은 이 번호로 문의해보시면 좋아요' 식으로 안내해.",
+    "정확한 날짜·기간 정보가 데이터에 없다는 사실을 길게 설명하지 말고, 곧바로 '정확한 일정과 세부 내용은 아래 각 축제의 전화번호로 문의해 확인해 보시길 권해드려요' 정도로 간결하게 안내해.",
   location:
     "주소를 문장 안에 자연스럽게 녹여서 설명해. 예: '~에 위치한'. 좌표(mapx/mapy)는 사람이 읽기 불편하니 문장으로 옮기지 마.",
   course:
@@ -306,12 +307,14 @@ async function createAnswer(question, intent, searchResult, historyForLLM) {
 
 절대 규칙:
 1. name/address/tel에 실제로 있는 값만 사실로 언급한다. 날짜, 요금, 프로그램 내용 등 데이터에 없는 사실을 지어내지 않는다.
-2. 이름에서 자연스럽게 유추 가능한 테마(예: 이름에 '라면'이 들어가면 라면 관련 행사) 정도는 언급해도 되지만, "몇 회째", "몇 명 참여" 같은 구체적 수치는 절대 만들어내지 않는다.
+2. 이름에서 유추 가능한 테마는 짧고 단정적인 명사구로 끝맺는다 (예: "중화요리 전문점.", "카페형 음식점.", "강변을 따라 걷기 좋은 공원."). "~이에요/예요" 문장체는 받침 유무에 따라 표기가 갈려서 문법 오류가 나기 쉬우니 장소 특징을 설명하는 부분에서는 아예 쓰지 않는다. "이름으로 보면", "~일 가능성이 있어요" 같은 헤징 표현도 쓰지 않는다. 단, "몇 회째", "몇 명 참여" 같은 구체적 수치·사실은 절대 지어내지 않는다.
 3. 이름과 주소만 나열하는 리스트 형태로 답하지 않는다. 반드시 자연스러운 문장/문단으로 설명한다.
 4. 장소가 여러 개면 번호(1, 2, 3)나 소제목 정도는 써도 되지만, 그 안의 설명은 완전한 문장으로 쓴다.
 5. 존댓말(해요체)로, 실제 사람 가이드가 설명해주듯 따뜻하고 자연스럽게 쓴다.
 6. image, lat, lng, id 같은 필드는 답변 문장에서 언급하지 않는다 (화면에 별도로 표시됨).
-7. 답변 마지막에 짧게 한 줄, 더 필요한 정보가 있으면 물어보라는 자연스러운 마무리를 덧붙인다.
+7. 간결하게 답한다. 데이터의 한계(없는 정보)를 설명해야 할 때도 장황한 배경 설명 없이 한 문장 이내로 짧게 언급하고 바로 본론으로 들어간다. 서론 없이 첫 문장부터 실질적인 정보를 준다.
+8. 마지막에 더 필요한 정보가 있으면 물어보라는 한 줄 정도의 짧은 마무리만 덧붙인다.
+9. tel 필드가 데이터에 없는 장소는 전화번호에 대해 아무 말도 하지 않는다. "전화번호 정보는 제공되지 않았어요" 같은 문장도 쓰지 않는다 — 그냥 언급 자체를 생략한다.
 
 이번 질문 유형은 "${intent.queryType}"이다. ${guide}
 `.trim();
@@ -321,13 +324,17 @@ async function createAnswer(question, intent, searchResult, historyForLLM) {
 
 검색된 JSON 데이터 (이 안의 정보만 활용할 것):
 ${JSON.stringify(
-  searchResult.map(({ name, address, tel, category }) => ({ name, address, tel, category })),
+  searchResult.map(({ name, address, tel, category }) => {
+    const item = { name, address, category };
+    if (tel) item.tel = tel; // 전화번호가 없는 항목은 필드 자체를 빼서, 모델이 "없다"고 언급할 거리를 없앤다
+    return item;
+  }),
   null,
   2
 )}
 `.trim();
 
-  return await callOpenAI({ system, user, history: historyForLLM, json: false });
+  return await callOpenAI({ system, user, history: historyForLLM });
 }
 
 // =====================================================
@@ -385,18 +392,18 @@ async function sendMessage() {
 
     const searchResult = searchRegion(intent);
 
-    let answer;
-    let sources = [];
     if (searchResult.length === 0) {
-      answer =
-        "말씀하신 조건에 딱 맞는 정보를 아직 찾지 못했어요 😢 지역이나 키워드를 조금 다르게 말씀해주시면 다시 찾아볼게요!";
-    } else {
-      answer = await createAnswer(question, intent, searchResult, historyForLLM);
-      // 답변 아래에 참고용 카드(이름+사진)로 보여줄 항목 (이미지가 있는 것만)
-      sources = searchResult
-        .filter((item) => item.image)
-        .map((item) => ({ name: item.name, image: item.image, address: item.address }));
+      messages.value.push({
+        role: "assistant",
+        content: "말씀하신 조건에 딱 맞는 정보를 아직 찾지 못했어요 😢 지역이나 키워드를 조금 다르게 말씀해주시면 다시 찾아볼게요!",
+      });
+      return;
     }
+
+    const answer = await createAnswer(question, intent, searchResult, historyForLLM);
+    const sources = searchResult
+      .filter((item) => item.image)
+      .map((item) => ({ name: item.name, image: item.image, address: item.address }));
 
     messages.value.push({ role: "assistant", content: answer, sources });
   } catch (error) {
