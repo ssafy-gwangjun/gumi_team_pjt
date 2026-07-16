@@ -105,7 +105,7 @@ onMounted(async () => {
 
 async function callOpenAI({ system, user, history = [], json = false }) {
   const body = {
-    model: "gpt-4.1-mini",
+    model: "gpt-5-mini",
     messages: [
       { role: "system", content: system },
       ...history,
