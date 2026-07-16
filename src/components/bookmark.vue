@@ -1,7 +1,7 @@
 <template>
   <section class="bookmark-page">
     <div class="bookmark-header">
-      <h2>내 즐겨찾기</h2>
+      <h2>⭐내 즐겨찾기</h2>
       <p>북마크한 장소와 좋아요한 장소를 한눈에 확인하세요.</p>
     </div>
 
@@ -91,13 +91,22 @@ const placeholderImage = 'https://via.placeholder.com/240x160?text=No+Image'
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
 }
 
+.bookmark-header {
+  margin-bottom: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
 .bookmark-header h2 {
   margin: 0;
   font-size: 1.4rem;
+  color: #111827;
 }
 
 .bookmark-header p {
-  margin: 0.5rem 0 1rem;
+  margin: 0.5rem 0 0;
   color: #555;
 }
 

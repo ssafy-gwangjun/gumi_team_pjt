@@ -6,9 +6,9 @@ import Community from './components/community.vue'
 import BookmarkView from './components/bookmark.vue'
 
 const navItems = [
-  { key: 'map', label: '관광 지도 안내' },
+  { key: 'map', label: '로컬 여행 지도' },
   { key: 'community', label: '익명 커뮤니티' },
-  { key: 'bookmarks', label: '내 저장 목록' }
+  { key: 'bookmarks', label: '내 즐겨찾기' }
 ]
 
 const currentPage = ref('map')
@@ -151,7 +151,6 @@ watch(likes, (val) => {
   padding: 1rem;
   box-sizing: border-box;
 }
-
 .app-header {
   max-width: 1600px;
   margin: 0 auto 1rem;
@@ -160,7 +159,9 @@ watch(likes, (val) => {
   background: linear-gradient(135deg, #0f766e, #22c55e);
   color: white;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 1.2rem;
   box-shadow: 0 25px 70px rgba(15, 23, 42, 0.18);
 }
@@ -170,6 +171,17 @@ watch(likes, (val) => {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.page-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .brand-mark {
@@ -199,12 +211,6 @@ watch(likes, (val) => {
   max-width: 740px;
   line-height: 1.65;
   opacity: 0.92;
-}
-
-.page-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
 }
 
 .tab-btn {

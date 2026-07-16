@@ -425,10 +425,12 @@ function getCommentTree() {
 
 <template>
   <section class="card">
-    <h3>📝 익명 커뮤니티</h3>
-    <p class="hint">
-      브라우저 localStorage에 저장됩니다. 게시글, 댓글, 대댓글은 모두 로컬에 저장됩니다.
-    </p>
+    <div class="community-header">
+      <h2>🗨️익명 커뮤니티</h2>
+      <p>
+        브라우저 localStorage에 저장됩니다. 게시글, 댓글, 대댓글은 모두 로컬에 저장됩니다.
+      </p>
+    </div>
 
     <!-- 게시글 목록 (전체 너비) -->
     <div class="post-list-section">
@@ -761,6 +763,25 @@ function getCommentTree() {
   border-radius: 12px;
   margin-bottom: 16px;
   background: #ffffff;
+}
+
+.community-header {
+  margin-bottom: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+.community-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: #111827;
+}
+
+.community-header p {
+  margin: 0.5rem 0 0;
+  color: #555;
 }
 
 h3 {

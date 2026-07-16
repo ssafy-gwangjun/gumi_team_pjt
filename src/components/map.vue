@@ -1,13 +1,10 @@
 <template>
   <section class="map-page-shell">
-    <div class="page-hero">
-      <div class="hero-copy">
-        <span class="hero-badge">Gumi Travel Hub</span>
-        <h2>구미시 로컬 여행 허브</h2>
-        <p>
-          금오산, 문화시설, 맛집, 숙박까지 구미의 주요 관광 정보를 지도에서 빠르게 확인하세요.
-        </p>
-      </div>
+    <div class="map-header">
+      <h2>🗺️로컬 여행 지도</h2>
+      <p>
+        금오산, 문화시설, 맛집, 숙박까지 구미의 주요 관광 정보를 지도에서 빠르게 확인하세요.
+      </p>
     </div>
 
     <div class="map-grid">
@@ -373,12 +370,31 @@ watch(filteredPlaces, updateMarkers)
 <style scoped>
 .map-page-shell {
   display: grid;
-  gap: 1rem;
+  gap: 0.5rem;
   width: 100%;
   padding: 1rem;
   background: #f8fafc;
   border-radius: 24px;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+}
+
+.map-header {
+  margin-bottom: 0.5rem;
+  padding: 1.25rem 1.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+.map-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: #111827;
+}
+
+.map-header p {
+  margin: 0.5rem 0 0;
+  color: #555;
 }
 
 .page-hero {
