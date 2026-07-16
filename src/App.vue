@@ -39,7 +39,39 @@ function toggleLike(item) {
   }
 }
 
-onMounted(() => {
+async function loadAttractions() {
+  const dataFiles = [
+    '구미_경북권_관광지.json',
+    '구미_경북권_문화시설.json',
+    '구미_경북권_축제공연사.json',
+    '구미_경북권_레포츠.json',
+    '구미_경북권_숙박.json',
+    '구미_경북권_쇼핑.json',
+    '구미_경북권_음식점.json',
+    '구미_경북권_여행코스.json'
+  ]
+
+  try {
+    const responses = await Promise.all(
+      dataFiles.map(async (fileName) => {
+        const res = await fetch(`/data/${fileName}`)
+        if (!res.ok) {
+          throw new Error(`데이터 로드 실패: ${fileName}`)
+        }
+        return res.json()
+      })
+    )
+
+    attractions.value = responses.flatMap((data) => data.items || [])
+  } catch (error) {
+    console.error('관광 데이터 로드 실패:', error)
+    attractions.value = []
+  }
+}
+
+onMounted(async () => {
+  await loadAttractions()
+
   const savedBookmarks = localStorage.getItem('gumi_bookmarks')
   if (savedBookmarks) {
     try { bookmarks.value = JSON.parse(savedBookmarks) } catch {}

@@ -928,12 +928,13 @@ defineExpose({
 .chat-header strong {
   display: block;
   font-size: 1rem;
+  letter-spacing: -0.025em;
 }
 
 .chat-header p {
   margin: 0.2rem 0 0;
-  font-size: 0.84rem;
-  opacity: 0.95;
+  font-size: 0.82rem;
+  opacity: 0.9;
 }
 
 .close-btn {
@@ -949,6 +950,7 @@ defineExpose({
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
+  padding: 0.2rem;
 }
 
 .close-btn:hover {
@@ -982,6 +984,7 @@ defineExpose({
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: keep-all;
+  font-size: 0.92rem;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
 }
 
@@ -1083,6 +1086,12 @@ defineExpose({
   color: #111827;
   font: inherit;
   font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.chat-popup-input input:focus {
+  border-color: #3b82f6;
 }
 
 .chat-popup-input input:focus {
@@ -1106,6 +1115,11 @@ defineExpose({
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.chat-popup-input button:hover {
+  background: #1d4ed8;
 }
 
 .chat-popup-input button:hover:not(:disabled) {
@@ -1160,15 +1174,7 @@ defineExpose({
 
   .chat-messages {
     min-height: 260px;
-    max-height: 60vh;
-  }
-
-  .chat-popup-input {
-    flex-direction: column;
-  }
-
-  .chat-popup-input button {
-    width: 100%;
+    max-height: 55vh;
   }
 
   .floating-chat {
