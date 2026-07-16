@@ -224,7 +224,7 @@ const createMarkerIcon = (typeId) => {
     iconAnchor: [14, 42],
     popupAnchor: [0, -36]
   })
-}
+} 
 
 const loadFile = async (fileName) => {
   const res = await fetch(`/data/${fileName}`)
