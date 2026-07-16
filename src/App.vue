@@ -96,7 +96,12 @@ watch(likes, (val) => {
   <div class="app-shell">
     <header class="app-header">
       <div class="brand-panel">
-        <div class="brand-mark">G</div>
+       
+        <img 
+          src="@/assets/logo-character.png" 
+          alt="구미 관광 가이드 로고" 
+          class="brand-mark-img" 
+        />
         <div>
           <p class="eyebrow">LocalHub Gumi</p>
           <h1>구미 관광 가이드</h1>
