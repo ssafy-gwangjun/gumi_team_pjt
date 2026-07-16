@@ -6,7 +6,11 @@ const posts = ref([])
 const form = ref({ title: '', content: '', password: '' })
 const editingId = ref(null)
 
+<<<<<<< HEAD
 // 검색 및 페이지네이션
+=======
+// 페이지네이션
+>>>>>>> master
 const searchQuery = ref('')
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
@@ -60,6 +64,7 @@ function formatDate(value) {
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
+<<<<<<< HEAD
 // 검색 필터링
 const filteredPosts = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -85,6 +90,8 @@ const paginatedPosts = computed(() => {
 watch(searchQuery, () => {
   currentPage.value = 1
 })
+=======
+>>>>>>> master
 
 // 게시글 추가/수정
 function addOrUpdatePost() {
@@ -203,6 +210,28 @@ function closeModal() {
   commentPasswordInputs.value = {}
   replyForms.value = {}
 }
+
+// 검색 필터링된 게시글
+const filteredPosts = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase()
+  if (!query) return posts.value
+  return posts.value.filter(post =>
+    post.title.toLowerCase().includes(query) ||
+    post.content.toLowerCase().includes(query)
+  )
+})
+
+// 전체 페이지 수
+const totalPages = computed(() => {
+  return Math.max(1, Math.ceil(filteredPosts.value.length / itemsPerPage.value))
+})
+
+// 현재 페이지에 보여줄 게시글
+const paginatedPosts = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return filteredPosts.value.slice(start, end)
+})
 
 // 댓글 추가
 function addComment() {
@@ -390,6 +419,11 @@ function closeWriteModal() {
   resetForm()
 }
 
+// 검색 처리
+function handleSearch() {
+  currentPage.value = 1
+}
+
 // 댓글 트리 구조 (1단계만)
 function getCommentTree() {
   if (!selectedPost.value) return []
@@ -420,6 +454,7 @@ function getCommentTree() {
         </button>
       </div>
 
+<<<<<<< HEAD
       <div class="search-box">
         <input
           v-model="searchQuery"
@@ -428,11 +463,27 @@ function getCommentTree() {
           class="search-input"
         />
         <button type="button" @click="currentPage = 1" class="search-btn">
+=======
+      <!-- 검색창 -->
+      <div class="search-box">
+        <input
+          v-model="searchQuery"
+          @input="handleSearch"
+          @keyup.enter="handleSearch"
+          placeholder="게시글 검색어를 입력하세요"
+          class="search-input"
+        />
+        <button @click="handleSearch" class="search-btn">
+>>>>>>> master
           🔍 검색
         </button>
       </div>
 
+<<<<<<< HEAD
       <div v-if="posts.length === 0" class="empty-state">
+=======
+      <div v-if="filteredPosts.length === 0" class="empty-state">
+>>>>>>> master
         <p>📌 게시글이 없습니다. 첫 번째 글을 작성해주세요!</p>
       </div>
       <div v-else-if="filteredPosts.length === 0" class="empty-state">
@@ -1328,5 +1379,54 @@ button:hover {
   padding: 16px 20px;
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
+}
+/* 검색창 */
+.search-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.search-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+.search-btn {
+  padding: 10px 16px;
+  background: #06b6d4;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.search-btn:hover {
+  background: #0891b2;
+  box-shadow: 0 2px 4px rgba(6, 182, 212, 0.3);
+}
+
+.search-btn:active {
+  transform: scale(0.98);
 }
 </style>
