@@ -133,6 +133,7 @@ function startEditPost() {
   form.value.content = selectedPost.value.content
   form.value.password = enteredPassword
   closeModal()
+  isWriteModalOpen.value = true
 }
 
 // 게시글 삭제
