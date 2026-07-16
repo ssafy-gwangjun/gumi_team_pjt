@@ -16,9 +16,14 @@
               :key="type.id"
               @click="setContentType(type.id)"
               :class="['filter-pill', { active: type.id === contentTypeId }]"
+              :style="{ '--filter-color': categoryMarkerColors[type.id] }"
             >
-              <span class="pill-icon">{{ filterIcons[type.id] }}</span>
-              {{ type.label }}
+              <span class="filter-pill-content">
+                <span class="pill-icon">{{ filterIcons[type.id] }}</span>
+                {{ type.label }}
+              </span>
+
+              <span class="filter-indicator"></span>
             </button>
           </div>
 
@@ -28,9 +33,14 @@
               :key="type.id"
               @click="setContentType(type.id)"
               :class="['filter-pill', { active: type.id === contentTypeId }]"
+              :style="{ '--filter-color': categoryMarkerColors[type.id] }"
             >
-              <span class="pill-icon">{{ filterIcons[type.id] }}</span>
-              {{ type.label }}
+              <span class="filter-pill-content">
+                <span class="pill-icon">{{ filterIcons[type.id] }}</span>
+                {{ type.label }}
+              </span>
+
+              <span class="filter-indicator"></span>
             </button>
           </div>
         </div>
@@ -486,26 +496,71 @@ watch(filteredPlaces, updateMarkers)
 }
 
 .filter-pill {
+  position: relative;
   flex: 0 0 auto;
+  min-width: 90px;
   border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  padding: 0.75rem 0.9rem 0.55rem;
   background: #f8fafc;
   color: #334155;
   cursor: pointer;
-  transition: all 0.18s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
   font-size: 0.92rem;
 }
 
-.filter-pill.active {
-  background: #0f766e;
-  color: white;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+.filter-pill-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  white-space: nowrap;
 }
 
+.filter-indicator {
+  display: block;
+  width: 55%;
+  height: 4px;
+  margin: 0.55rem auto 0;
+  border-radius: 999px;
+  background: var(--filter-color);
+  opacity: 0.7;
+  transition:
+    width 0.18s ease,
+    height 0.18s ease,
+    opacity 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.filter-pill:hover {
+  background: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+.filter-pill:hover .filter-indicator {
+  width: 75%;
+  opacity: 1;
+}
+
+.filter-pill.active {
+  background: color-mix(in srgb, var(--filter-color) 12%, white);
+  color: #0f172a;
+  border-color: color-mix(in srgb, var(--filter-color) 35%, white);
+  box-shadow: 0 8px 20px
+    color-mix(in srgb, var(--filter-color) 20%, transparent);
+}
+
+.filter-pill.active .filter-indicator {
+  width: 85%;
+  height: 5px;
+  opacity: 1;
+  box-shadow: 0 0 8px
+    color-mix(in srgb, var(--filter-color) 55%, transparent);
+}
 .pill-icon {
   width: 1.4rem;
   height: 1.4rem;
