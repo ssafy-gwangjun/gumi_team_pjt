@@ -1,2212 +1,544 @@
 <script setup>
-import { nextTick, onMounted, ref } from 'vue'
-import OpenAI from 'openai'
+import { ref, computed, onMounted, nextTick } from "vue";
 
-const DATA_FILES = [
-  '구미_경북권_관광지.json',
-  '구미_경북권_문화시설.json',
-  '구미_경북권_축제공연행사.json',
-  '구미_경북권_레포츠.json',
-  '구미_경북권_숙박.json',
-  '구미_경북권_쇼핑.json',
-  '구미_경북권_음식점.json',
-  '구미_경북권_여행코스.json'
-]
+// =====================================================
+// 기본 상태
+// =====================================================
 
-const OPENAI_MODEL =
-  import.meta.env.VITE_OPENAI_MODEL || 'gpt-5-mini'
-
-const API_KEY = import.meta.env.VITE_OPENAI_API_KEY
-
-const MAX_SEARCH_RESULTS = 16
-const MAX_MODEL_CONTEXT_ITEMS = 6
-const MAX_CONVERSATION_MESSAGES = 4
-const MAX_COMPLETION_TOKENS = 300
-
-const openai = API_KEY
-  ? new OpenAI({
-      apiKey: API_KEY,
-      dangerouslyAllowBrowser: true
-    })
-  : null
-
-const CONTENT_TYPE_NAMES = {
-  '12': '관광지',
-  '14': '문화시설',
-  '15': '축제·공연·행사',
-  '25': '여행코스',
-  '28': '레포츠',
-  '32': '숙박',
-  '38': '쇼핑',
-  '39': '음식점'
-}
-
-const CONTENT_TYPE_ALIASES = {
-  '12': [
-    '관광지',
-    '관광',
-    '명소',
-    '여행지',
-    '볼거리',
-    '가볼 만한 곳',
-    '가볼만한곳',
-    '갈 만한 곳',
-    '갈만한곳',
-    '구경할 곳',
-    '구경거리',
-    '나들이',
-    '산책',
-    '데이트',
-    '사진 찍을 곳',
-    '힐링',
-    '공원',
-    '전망대',
-    '자연',
-    '경치',
-    '풍경',
-    '드라이브'
-  ],
-  '14': [
-    '문화시설',
-    '문화 시설',
-    '문화',
-    '박물관',
-    '미술관',
-    '전시',
-    '전시관',
-    '기념관',
-    '공연장',
-    '도서관',
-    '역사',
-    '교육',
-    '실내'
-  ],
-  '15': [
-    '축제',
-    '행사',
-    '공연',
-    '이벤트',
-    '페스티벌',
-    '볼 만한 행사',
-    '공연 행사',
-    '지역 행사'
-  ],
-  '25': [
-    '여행코스',
-    '여행 코스',
-    '관광코스',
-    '관광 코스',
-    '데이트코스',
-    '데이트 코스',
-    '드라이브코스',
-    '드라이브 코스',
-    '코스',
-    '일정',
-    '동선',
-    '하루 여행',
-    '당일치기'
-  ],
-  '28': [
-    '레포츠',
-    '스포츠',
-    '체험',
-    '액티비티',
-    '놀거리',
-    '활동',
-    '운동',
-    '야외 활동',
-    '야외활동',
-    '자전거',
-    '트레킹',
-    '등산'
-  ],
-  '32': [
-    '숙박',
-    '숙소',
-    '호텔',
-    '모텔',
-    '펜션',
-    '민박',
-    '게스트하우스',
-    '리조트',
-    '콘도',
-    '잘 곳',
-    '자는 곳',
-    '머물 곳',
-    '하룻밤'
-  ],
-  '38': [
-    '쇼핑',
-    '시장',
-    '상점',
-    '마트',
-    '백화점',
-    '아울렛',
-    '기념품',
-    '선물',
-    '살 곳',
-    '장보기',
-    '특산품'
-  ],
-  '39': [
-    '음식점',
-    '식당',
-    '맛집',
-    '밥집',
-    '먹거리',
-    '먹을 곳',
-    '카페',
-    '커피',
-    '디저트',
-    '분식',
-    '술집',
-    '한식',
-    '중식',
-    '일식',
-    '양식',
-    '밥',
-    '음식',
-    '먹는 곳',
-    '식사',
-    '뭐 먹지'
-  ]
-}
-
-const FIELD_ALIASES = {
-  address: [
-    '주소',
-    '위치',
-    '어디',
-    '어디야',
-    '어딨어',
-    '장소',
-    '소재지',
-    '찾아가는 곳'
-  ],
-  phone: [
-    '전화',
-    '전화번호',
-    '연락처',
-    '문의',
-    '문의 번호',
-    '번호'
-  ],
-  coordinates: [
-    '좌표',
-    '위도',
-    '경도',
-    '지도 위치',
-    '맵 위치'
-  ],
-  image: [
-    '사진',
-    '이미지',
-    '그림',
-    '썸네일',
-    '모습'
-  ],
-  zipcode: [
-    '우편번호',
-    '우편 번호'
-  ],
-  category: [
-    '유형',
-    '분류',
-    '종류',
-    '카테고리'
-  ]
-}
-
-const EXPANSION_RULES = [
-  {
-    pattern: /데이트|연인|커플/,
-    types: ['12', '25', '39'],
-    terms: ['관광지', '여행코스', '음식점']
-  },
-  {
-    pattern: /아이|아기|어린이|가족/,
-    types: ['12', '14', '28'],
-    terms: ['관광지', '문화시설', '체험']
-  },
-  {
-    pattern: /부모님|어른|어르신/,
-    types: ['12', '14', '25'],
-    terms: ['관광지', '문화시설', '여행코스']
-  },
-  {
-    pattern: /비\s*오는|비올|비가|우천|장마/,
-    types: ['14', '38', '39'],
-    terms: ['문화시설', '쇼핑', '음식점']
-  },
-  {
-    pattern: /실내/,
-    types: ['14', '38', '39'],
-    terms: ['문화시설', '쇼핑', '음식점']
-  },
-  {
-    pattern: /야외|밖에서/,
-    types: ['12', '28', '25'],
-    terms: ['관광지', '레포츠', '여행코스']
-  },
-  {
-    pattern: /산책|걷기|걸을/,
-    types: ['12', '25'],
-    terms: ['관광지', '여행코스', '산책']
-  },
-  {
-    pattern: /놀거리|재밌|활동적|몸\s*쓰/,
-    types: ['28', '12'],
-    terms: ['레포츠', '체험', '관광지']
-  },
-  {
-    pattern: /조용|한적|힐링|쉬고/,
-    types: ['12', '25'],
-    terms: ['관광지', '여행코스', '자연']
-  },
-  {
-    pattern: /먹고|배고|식사|밥/,
-    types: ['39'],
-    terms: ['음식점']
-  },
-  {
-    pattern: /자고|숙박|머물|하룻밤/,
-    types: ['32'],
-    terms: ['숙박']
-  },
-  {
-    pattern: /선물|기념품|살\s*것|쇼핑/,
-    types: ['38'],
-    terms: ['쇼핑']
-  }
-]
-
-const STOP_WORDS = new Set([
-  '구미',
-  '경북',
-  '경상북도',
-  '구미시',
-  '관광',
-  '여행',
-  '장소',
-  '정보',
-  '관련',
-  '대해',
-  '대한',
-  '좀',
-  '약간',
-  '그냥',
-  '혹시',
-  '그러면',
-  '그리고',
-  '근데',
-  '그런데',
-  '알려줘',
-  '알려주세요',
-  '알려',
-  '말해줘',
-  '말해주세요',
-  '보여줘',
-  '보여주세요',
-  '찾아줘',
-  '찾아주세요',
-  '추천해줘',
-  '추천해주세요',
-  '추천',
-  '어디야',
-  '어디',
-  '무엇',
-  '뭐가',
-  '뭐야',
-  '뭔가',
-  '어떤',
-  '있는',
-  '있어',
-  '있나요',
-  '있나',
-  '있을까',
-  '없어',
-  '없나요',
-  '주세요',
-  '해줘',
-  '해주라',
-  '가고',
-  '싶어',
-  '싶은데',
-  '좋은',
-  '괜찮은',
-  '적당한',
-  '근처',
-  '주변',
-  '인근',
-  '부근',
-  '지역',
-  '권역',
-  '거기',
-  '그곳',
-  '여기',
-  '저기',
-  '그거',
-  '그건',
-  '이거',
-  '저거',
-  '여기는',
-  '거기는',
-  '곳은',
-  '곳이',
-  '곳을',
-  '곳에서',
-  '곳으로',
-  '할만한',
-  '만한',
-  '갈만한',
-  '가볼만한',
-  '추천할',
-  '하나',
-  '몇개',
-  '몇',
-  '개',
-  '군데',
-  '여러개',
-  '여러',
-  '뭐',
-  '왜',
-  '어떻게',
-  '제일',
-  '가장',
-  '내가',
-  '나는',
-  '우리',
-  '하고',
-  '해서',
-  '할까',
-  '할지',
-  '좋을까',
-  '괜찮을까'
-])
+const open = ref(false);
+const input = ref("");
+const loading = ref(false);
+const chatBody = ref(null);
 
 const messages = ref([
   {
-    type: 'bot',
-    text: '구미 관광과 관련해 궁금한 내용을 편하게 질문해 주세요.',
-    isGreeting: true
-  }
-])
+    role: "assistant",
+    content:
+      "안녕하세요 😊 구미·경북권 여행 정보를 도와드리는 챗봇이에요.\n관광지, 축제, 모범음식점, 숙박, 여행코스 등 궁금한 걸 편하게 물어보세요!",
+  },
+]);
 
-const attractions = ref([])
-const lastContextItems = ref([])
-const lastQuestionAnalysis = ref(null)
-const newQuestion = ref('')
-const isChatOpen = ref(false)
-const isLoading = ref(false)
-const isDataLoading = ref(true)
-const dataLoadError = ref('')
-const messagesContainer = ref(null)
+// 초기 화면에서 보여줄 추천 질문 (예시 질의 유형을 그대로 반영)
+const suggestedPrompts = [
+  "아이랑 갈만한 관광지 추천해줘",
+  "이번 달 열리는 축제 알려줘",
+  "구미 모범음식점 위치 알려줘",
+  "하루 코스로 돌아볼만한 여행코스 있어?",
+];
 
-const normalizeText = value =>
-  String(value ?? '')
-    .toLowerCase()
-    .normalize('NFKC')
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-const compactText = value =>
-  normalizeText(value).replace(/\s+/g, '')
-
-const getInitialConsonants = value => {
-  const consonants = [
-    'ㄱ',
-    'ㄲ',
-    'ㄴ',
-    'ㄷ',
-    'ㄸ',
-    'ㄹ',
-    'ㅁ',
-    'ㅂ',
-    'ㅃ',
-    'ㅅ',
-    'ㅆ',
-    'ㅇ',
-    'ㅈ',
-    'ㅉ',
-    'ㅊ',
-    'ㅋ',
-    'ㅌ',
-    'ㅍ',
-    'ㅎ'
-  ]
-
-  return String(value ?? '')
-    .split('')
-    .map(character => {
-      const code = character.charCodeAt(0)
-
-      if (code >= 0xac00 && code <= 0xd7a3) {
-        return consonants[Math.floor((code - 0xac00) / 588)]
-      }
-
-      return character
-    })
-    .join('')
+function useSuggestion(text) {
+  input.value = text;
+  sendMessage();
 }
 
-const levenshteinDistance = (leftValue, rightValue) => {
-  const left = compactText(leftValue)
-  const right = compactText(rightValue)
+// =====================================================
+// JSON 데이터 설정 & 로딩
+// =====================================================
 
-  if (!left.length) return right.length
-  if (!right.length) return left.length
-  if (left === right) return 0
+const CATEGORY_LIST = [
+  "관광지",
+  "문화시설",
+  "축제",
+  "레포츠",
+  "숙박",
+  "쇼핑",
+  "음식점",
+  "여행코스",
+];
 
-  const previous = Array.from(
-    { length: right.length + 1 },
-    (_, index) => index
-  )
+const jsonFiles = [
+  { category: "관광지", path: "/data/구미_경북권_관광지.json" },
+  { category: "문화시설", path: "/data/구미_경북권_문화시설.json" },
+  { category: "축제", path: "/data/구미_경북권_축제공연행사.json" },
+  { category: "레포츠", path: "/data/구미_경북권_레포츠.json" },
+  { category: "숙박", path: "/data/구미_경북권_숙박.json" },
+  { category: "쇼핑", path: "/data/구미_경북권_쇼핑.json" },
+  { category: "음식점", path: "/data/구미_경북권_음식점.json" },
+  { category: "여행코스", path: "/data/구미_경북권_여행코스.json" },
+];
 
-  for (
-    let leftIndex = 1;
-    leftIndex <= left.length;
-    leftIndex += 1
-  ) {
-    const current = [leftIndex]
+const regionDB = ref([]);
+const dbReady = ref(false);
 
-    for (
-      let rightIndex = 1;
-      rightIndex <= right.length;
-      rightIndex += 1
-    ) {
-      const substitutionCost =
-        left[leftIndex - 1] === right[rightIndex - 1]
-          ? 0
-          : 1
-
-      current[rightIndex] = Math.min(
-        current[rightIndex - 1] + 1,
-        previous[rightIndex] + 1,
-        previous[rightIndex - 1] + substitutionCost
-      )
-    }
-
-    previous.splice(0, previous.length, ...current)
-  }
-
-  return previous[right.length]
-}
-
-const getSimilarity = (leftValue, rightValue) => {
-  const left = compactText(leftValue)
-  const right = compactText(rightValue)
-
-  if (!left || !right) return 0
-  if (left === right) return 1
-
-  if (left.includes(right) || right.includes(left)) {
-    return 0.9
-  }
-
-  const distance = levenshteinDistance(left, right)
-  const longestLength = Math.max(left.length, right.length)
-
-  if (!longestLength) return 0
-
-  return Math.max(0, 1 - distance / longestLength)
-}
-
-const createNgrams = (value, size = 2) => {
-  const text = compactText(value)
-
-  if (!text) return []
-  if (text.length <= size) return [text]
-
-  const ngrams = []
-
-  for (
-    let index = 0;
-    index <= text.length - size;
-    index += 1
-  ) {
-    ngrams.push(text.slice(index, index + size))
-  }
-
-  return ngrams
-}
-
-const getNgramSimilarity = (leftValue, rightValue) => {
-  const leftNgrams = new Set(createNgrams(leftValue))
-  const rightNgrams = new Set(createNgrams(rightValue))
-
-  if (!leftNgrams.size || !rightNgrams.size) {
-    return 0
-  }
-
-  let intersectionCount = 0
-
-  leftNgrams.forEach(ngram => {
-    if (rightNgrams.has(ngram)) {
-      intersectionCount += 1
-    }
-  })
-
-  return (
-    (2 * intersectionCount) /
-    (leftNgrams.size + rightNgrams.size)
-  )
-}
-
-const isTourItem = value => {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    Array.isArray(value)
-  ) {
-    return false
-  }
-
-  return Boolean(
-    value.contentid ||
-      value.contenttypeid ||
-      value.title ||
-      value.addr1 ||
-      value.mapx ||
-      value.mapy
-  )
-}
-
-const extractTourItems = value => {
-  if (!value) return []
-
-  if (Array.isArray(value)) {
-    return value.flatMap(entry =>
-      extractTourItems(entry)
-    )
-  }
-
-  if (typeof value !== 'object') {
-    return []
-  }
-
-  if (isTourItem(value)) {
-    return [value]
-  }
-
-  if (Array.isArray(value.items)) {
-    const inheritedContentTypeId = String(
-      value.contentTypeId ??
-        value.contenttypeid ??
-        ''
-    ).trim()
-
-    return value.items
-      .filter(
-        item =>
-          item &&
-          typeof item === 'object'
-      )
-      .map(item => ({
-        ...item,
-        contenttypeid:
-          String(
-            item.contenttypeid ?? ''
-          ).trim() ||
-          inheritedContentTypeId
-      }))
-  }
-
-  return Object.values(value).flatMap(entry =>
-    extractTourItems(entry)
-  )
-}
-
-const removeDuplicateItems = items => {
-  const uniqueItems = new Map()
-
-  items.forEach(item => {
-    const contentId = String(
-      item.contentid ?? ''
-    ).trim()
-
-    const fallbackKey = [
-      compactText(item.title),
-      compactText(item.addr1),
-      String(
-        item.contenttypeid ?? ''
-      ).trim()
-    ].join('|')
-
-    const key = contentId
-      ? `contentid:${contentId}`
-      : `fallback:${fallbackKey}`
-
-    if (!uniqueItems.has(key)) {
-      uniqueItems.set(key, item)
-    }
-  })
-
-  return [...uniqueItems.values()]
-}
-
-const createSearchMetadata = item => {
-  const typeId = String(
-    item.contenttypeid ?? ''
-  ).trim()
-
-  const typeName =
-    CONTENT_TYPE_NAMES[typeId] || ''
-
-  const title = normalizeText(item.title)
-
-  const address = normalizeText(
-    [
-      item.addr1,
-      item.addr2,
-      item.zipcode
-    ]
-      .filter(Boolean)
-      .join(' ')
-  )
-
-  const categories = normalizeText(
-    [
-      item.cat1,
-      item.cat2,
-      item.cat3,
-      item.lclsSystm1,
-      item.lclsSystm2,
-      item.lclsSystm3,
-      typeName
-    ]
-      .filter(Boolean)
-      .join(' ')
-  )
-
-  const fullText = normalizeText(
-    [
-      item.title,
-      item.addr1,
-      item.addr2,
-      item.zipcode,
-      item.tel,
-      item.cat1,
-      item.cat2,
-      item.cat3,
-      item.lclsSystm1,
-      item.lclsSystm2,
-      item.lclsSystm3,
-      typeName
-    ]
-      .filter(Boolean)
-      .join(' ')
-  )
-
+// TourAPI 4.0 원본 필드 → 챗봇이 실제로 쓰는 필드로 정규화.
+// 원본에는 cat1~3, lclsSystm 같은 분류 코드와 createdtime 등
+// 검색/답변에 쓸모없는 값이 많아서, 여기서 필요한 것만 추려낸다.
+// (설명/일정/요금 같은 텍스트 필드는 원본에 아예 없음 — SCHEMA.md 기준)
+function normalizeItem(raw, category) {
+  const address = [raw.addr1, raw.addr2].filter(Boolean).join(" ").trim();
   return {
-    ...item,
-    _search: {
-      title,
-      compactTitle: compactText(title),
-      titleInitials:
-        getInitialConsonants(title),
-      address,
-      categories,
-      fullText,
-      compactFullText:
-        compactText(fullText)
-    }
-  }
+    id: raw.contentid,
+    category,
+    name: raw.title || "",
+    address,
+    tel: raw.tel || "",
+    image: raw.firstimage2 || raw.firstimage || "",
+    lat: raw.mapy ? Number(raw.mapy) : null,
+    lng: raw.mapx ? Number(raw.mapx) : null,
+  };
 }
 
-const loadTourData = async () => {
-  isDataLoading.value = true
-  dataLoadError.value = ''
+onMounted(async () => {
+  const result = await Promise.all(
+    jsonFiles.map(async (file) => {
+      try {
+        const response = await fetch(file.path);
+        const json = await response.json();
+        // 최상위가 배열이 아니라 { region, items:[...] } 형태의 객체
+        const items = Array.isArray(json) ? json : json.items || [];
+        return items.map((item) => normalizeItem(item, file.category));
+      } catch (error) {
+        console.error("[지역 데이터 로딩 실패]", file.path, error);
+        return [];
+      }
+    })
+  );
+
+  regionDB.value = result.flat();
+  dbReady.value = true;
+  console.log("지역 데이터 로딩 완료:", regionDB.value.length, "건");
+});
+
+// =====================================================
+// OpenAI 공통 호출 헬퍼
+// =====================================================
+
+async function callOpenAI({ system, user, history = [], json = false }) {
+  const body = {
+    model: "gpt-5-mini",
+    messages: [
+      { role: "system", content: system },
+      ...history,
+      { role: "user", content: user },
+    ],
+  };
+
+  if (json) {
+    body.response_format = { type: "json_object" };
+  }
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenAI API 오류 (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// =====================================================
+// 1단계: 질문 분석 (자연어 → 구조화된 검색 조건)
+// =====================================================
+// 단순 카테고리 하나가 아니라, 복합 질문("축제랑 근처 맛집")도
+// 어느 정도 대응할 수 있도록 카테고리를 배열로 받고,
+// 질의 유형(queryType)까지 뽑아서 답변 톤을 다르게 가져간다.
+
+async function analyzeQuestion(question, historyForLLM) {
+  const system = `
+너는 "구미·경북권 지역 정보 챗봇"의 질문 분석기다.
+사용자의 질문을 분석해서 아래 JSON 형식으로만 답한다. 설명 문장은 절대 추가하지 않는다.
+
+{
+  "inScope": true,
+  "categories": ["관광지"],
+  "keywords": ["아이", "체험", "가족"],
+  "queryType": "recommend",
+  "clarifyNeeded": false,
+  "clarifyQuestion": ""
+}
+
+중요: 이 데이터베이스의 각 항목에는 "이름(장소/행사명)", "주소", "전화번호"만 있다.
+설명, 소개글, 날짜/기간, 요금, 프로그램, 대상 연령 같은 텍스트 정보는 전혀 없다.
+따라서 keywords는 이름이나 주소에 실제로 등장할 법한 "고유한 단어"만 뽑아야 한다.
+(장소명 일부, 음식/축제 테마 단어, 동/읍/면/거리 이름 등)
+"아이랑", "가족끼리", "힐링", "분위기 좋은", "10월에" 처럼 이름/주소에 나타나지 않을
+추상적 수식어나 날짜는 keywords에 넣지 말고 비워 둔다(빈 배열). 그런 요청은 카테고리
+필터만으로 넓게 찾은 뒤 답변에서 자연스럽게 풀어주면 된다.
+
+필드 설명:
+- inScope: 아래 categories 중 하나라도 관련이 있으면 true.
+  단, "커뮤니티 게시글", "회원 후기", "로그인", "예약 내역" 등
+  이 데이터베이스와 무관한 요청이면 false로 표시한다.
+- categories: 아래 목록 중에서만 1~2개 선택 (관련 있는 것만, 애매하면 가장 유력한 1개만)
+  ["관광지","문화시설","축제","레포츠","숙박","쇼핑","음식점","여행코스"]
+  ※ "모범음식점", "맛집", "우수업소" 관련 질문은 category "음식점"으로 매핑
+    (단, "모범업소"라는 단어가 실제 상호명에 들어있는 경우는 드무니 keywords에는 넣지 않는다)
+- keywords: 이름/주소에 실제로 나타날 만한 고유 단어 0~5개. 없으면 빈 배열([])로 둔다.
+- queryType: 아래 중 하나
+  "recommend" (추천), "schedule" (일정/기간 문의), "location" (위치/찾아가는 법),
+  "course" (코스/동선 구성), "info" (기타 상세 정보)
+- clarifyNeeded: 지역 정보 질문이 맞지만 너무 모호해서 되물어야 하면 true
+- clarifyQuestion: clarifyNeeded가 true일 때만, 사용자에게 되물을 한국어 질문 한 문장
+
+예시)
+질문: "아이와 갈만한 곳 추천해줘"
+{"inScope":true,"categories":["관광지"],"keywords":[],"queryType":"recommend","clarifyNeeded":false,"clarifyQuestion":""}
+
+질문: "구미 라면축제 어디서 해?"
+{"inScope":true,"categories":["축제"],"keywords":["라면"],"queryType":"location","clarifyNeeded":false,"clarifyQuestion":""}
+
+질문: "10월에 하는 축제 있어?"
+{"inScope":true,"categories":["축제"],"keywords":[],"queryType":"schedule","clarifyNeeded":false,"clarifyQuestion":""}
+
+질문: "모범음식점 알려줘"
+{"inScope":true,"categories":["음식점"],"keywords":[],"queryType":"recommend","clarifyNeeded":false,"clarifyQuestion":""}
+`.trim();
+
+  const raw = await callOpenAI({
+    system,
+    user: question,
+    history: historyForLLM,
+    json: true,
+  });
 
   try {
-    const results = await Promise.all(
-      DATA_FILES.map(async fileName => {
-        const response = await fetch(
-          encodeURI(`/data/${fileName}`)
-        )
-
-        if (!response.ok) {
-          throw new Error(
-            `${fileName} 불러오기 실패: ${response.status}`
-          )
-        }
-
-        return response.json()
-      })
-    )
-
-    const items = results.flatMap(result =>
-      extractTourItems(result)
-    )
-
-    attractions.value = removeDuplicateItems(
-      items
-    ).map(createSearchMetadata)
-
-    if (!attractions.value.length) {
-      throw new Error(
-        'JSON 파일에서 관광 데이터를 찾지 못했습니다.'
-      )
-    }
-  } catch (error) {
-    console.error(
-      '관광 데이터 로딩 오류:',
-      error
-    )
-
-    dataLoadError.value =
-      error?.message ||
-      '관광 데이터를 불러오지 못했습니다.'
-
-    attractions.value = []
-  } finally {
-    isDataLoading.value = false
-  }
-}
-
-const extractLocalContentTypes = question => {
-  const normalizedQuestion =
-    normalizeText(question)
-
-  const compactQuestion =
-    compactText(question)
-
-  const typeScores = []
-
-  Object.entries(
-    CONTENT_TYPE_ALIASES
-  ).forEach(([typeId, aliases]) => {
-    let score = 0
-
-    aliases.forEach(alias => {
-      const normalizedAlias =
-        normalizeText(alias)
-
-      const compactAlias =
-        compactText(alias)
-
-      if (
-        normalizedQuestion.includes(
-          normalizedAlias
-        ) ||
-        compactQuestion.includes(
-          compactAlias
-        )
-      ) {
-        score +=
-          compactAlias.length >= 4 ? 5 : 3
-      }
-    })
-
-    if (score > 0) {
-      typeScores.push({
-        typeId,
-        score
-      })
-    }
-  })
-
-  return typeScores
-    .sort(
-      (left, right) =>
-        right.score - left.score
-    )
-    .map(entry => entry.typeId)
-}
-
-const extractLocalRequestedFields =
-  question => {
-    const normalizedQuestion =
-      normalizeText(question)
-
-    const compactQuestion =
-      compactText(question)
-
-    const requestedFields = []
-
-    Object.entries(
-      FIELD_ALIASES
-    ).forEach(([field, aliases]) => {
-      const matched = aliases.some(
-        alias => {
-          const normalizedAlias =
-            normalizeText(alias)
-
-          return (
-            normalizedQuestion.includes(
-              normalizedAlias
-            ) ||
-            compactQuestion.includes(
-              compactText(
-                normalizedAlias
-              )
-            )
-          )
-        }
-      )
-
-      if (matched) {
-        requestedFields.push(field)
-      }
-    })
-
-    return requestedFields
-  }
-
-const extractLocalSearchTerms = question => {
-  const normalizedQuestion =
-    normalizeText(question)
-
-  return [
-    ...new Set(
-      normalizedQuestion
-        .split(' ')
-        .map(word => word.trim())
-        .filter(Boolean)
-        .filter(
-          word => word.length >= 2
-        )
-        .filter(
-          word => !STOP_WORDS.has(word)
-        )
-    )
-  ]
-}
-
-const isLocalFollowUpQuestion =
-  question => {
-    const normalizedQuestion =
-      normalizeText(question)
-
-    return (
-      /거기|그곳|그 장소|그 식당|그 숙소|그 관광지|그 코스|그거|그건|아까|방금|첫 번째|첫번째|두 번째|두번째|세 번째|세번째|마지막|위에 말한|전에 말한/.test(
-        normalizedQuestion
-      ) ||
-      /^(주소|위치|전화|전화번호|연락처|좌표|사진|이미지|종류|유형|어디)/.test(
-        normalizedQuestion
-      )
-    )
-  }
-
-const extractExpandedAnalysis = question => {
-  const normalizedQuestion =
-    normalizeText(question)
-
-  const types = []
-  const terms = []
-
-  EXPANSION_RULES.forEach(rule => {
-    if (
-      rule.pattern.test(
-        normalizedQuestion
-      )
-    ) {
-      types.push(...rule.types)
-      terms.push(...rule.terms)
-    }
-  })
-
-  return {
-    types: [...new Set(types)],
-    terms: [...new Set(terms)]
-  }
-}
-
-const extractRequestedCount = question => {
-  const normalizedQuestion =
-    normalizeText(question)
-
-  const numberMatch =
-    normalizedQuestion.match(
-      /(\d+)\s*(개|곳|군데)/
-    )
-
-  if (numberMatch) {
-    return Math.min(
-      Math.max(
-        Number(numberMatch[1]),
-        1
-      ),
-      10
-    )
-  }
-
-  const koreanNumbers = [
-    {
-      pattern: /한\s*(개|곳|군데)/,
-      count: 1
-    },
-    {
-      pattern: /두\s*(개|곳|군데)/,
-      count: 2
-    },
-    {
-      pattern: /세\s*(개|곳|군데)/,
-      count: 3
-    },
-    {
-      pattern: /네\s*(개|곳|군데)/,
-      count: 4
-    },
-    {
-      pattern: /다섯\s*(개|곳|군데)/,
-      count: 5
-    }
-  ]
-
-  const matched =
-    koreanNumbers.find(entry =>
-      entry.pattern.test(
-        normalizedQuestion
-      )
-    )
-
-  return matched?.count || 3
-}
-
-const createLocalQuestionAnalysis =
-  question => {
-    const normalizedQuestion =
-      normalizeText(question)
-
-    const expanded =
-      extractExpandedAnalysis(question)
-
-    const contentTypeIds = [
-      ...new Set([
-        ...extractLocalContentTypes(
-          question
-        ),
-        ...expanded.types
-      ])
-    ]
-
-    const wantsComparison =
-      /비교|차이|어디가 더|뭐가 더|둘 중|둘중/.test(
-        normalizedQuestion
-      )
-
-    const wantsRecommendation =
-      /추천|괜찮|좋은|갈만|가볼만|먹을만|어디가 좋|뭐가 좋|골라/.test(
-        normalizedQuestion
-      )
-
-    const requestedFields =
-      extractLocalRequestedFields(
-        question
-      )
-
-    let intent = 'search'
-
-    if (wantsComparison) {
-      intent = 'compare'
-    } else if (wantsRecommendation) {
-      intent = 'recommend'
-    } else if (
-      requestedFields.length ||
-      isLocalFollowUpQuestion(question)
-    ) {
-      intent = 'detail'
-    }
-
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error("intent 파싱 실패:", raw);
     return {
-      intent,
-      contentTypeIds,
-      searchTerms:
-        extractLocalSearchTerms(
-          question
-        ),
-      expandedTerms: expanded.terms,
-      requestedFields,
-      isFollowUp:
-        isLocalFollowUpQuestion(
-          question
-        ),
-      wantsRecommendation,
-      wantsComparison,
-      requestedCount:
-        extractRequestedCount(
-          question
-        ),
-      originalQuestion: question
+      inScope: true,
+      categories: [],
+      keywords: [],
+      queryType: "info",
+      clarifyNeeded: false,
+      clarifyQuestion: "",
+    };
+  }
+}
+
+// =====================================================
+// 2단계: JSON 검색 (키워드 매칭 스코어링)
+// =====================================================
+
+function scoreItem(item, keywords) {
+  const name = (item.name || "").toLowerCase();
+  const address = (item.address || "").toLowerCase();
+  let score = 0;
+  const matched = [];
+
+  keywords.forEach((kw) => {
+    const k = String(kw).toLowerCase().trim();
+    if (!k) return;
+
+    if (name.includes(k)) {
+      score += 3; // 이름에 들어간 키워드가 훨씬 중요 (예: "라면" → "구미라면 축제")
+      matched.push(kw);
+    } else if (address.includes(k)) {
+      score += 1; // 주소(동네 이름 등) 매칭은 보조적으로만 반영
+      matched.push(kw);
     }
+  });
+
+  return { score, matched };
+}
+
+function shuffle(arr) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
+  return copy;
+}
 
-const getConversationHistory = () =>
-  messages.value
-    .filter(message =>
-      ['user', 'bot'].includes(
-        message.type
-      )
-    )
-    .filter(
-      message =>
-        message.text &&
-        !message.isGreeting &&
-        !message.isError
-    )
-    .slice(
-      -MAX_CONVERSATION_MESSAGES
-    )
-    .map(message => ({
-      role:
-        message.type === 'user'
-          ? 'user'
-          : 'assistant',
-      content: message.text
-    }))
-
-const getTermScore = (item, term) => {
-  const normalizedTerm =
-    normalizeText(term)
-
-  const compactTerm =
-    compactText(term)
-
-  if (
-    !normalizedTerm ||
-    !compactTerm
-  ) {
-    return 0
-  }
-
-  const title = item._search.title
-  const compactTitle =
-    item._search.compactTitle
-
-  const titleInitials =
-    item._search.titleInitials
-
-  const address =
-    item._search.address
-
+function searchRegion(intent) {
   const categories =
-    item._search.categories
+    intent.categories && intent.categories.length
+      ? intent.categories.filter((c) => CATEGORY_LIST.includes(c))
+      : CATEGORY_LIST;
 
-  const compactFullText =
-    item._search.compactFullText
+  let pool = regionDB.value.filter((item) => categories.includes(item.category));
 
-  let score = 0
+  const keywords = intent.keywords || [];
 
-  if (compactTitle === compactTerm) {
-    score += 90
-  } else if (
-    compactTitle.startsWith(
-      compactTerm
-    )
-  ) {
-    score += 60
-  } else if (
-    compactTitle.includes(
-      compactTerm
-    )
-  ) {
-    score += 48
-  } else if (
-    compactTerm.includes(
-      compactTitle
-    )
-  ) {
-    score += 34
+  if (keywords.length === 0) {
+    // 키워드가 없으면(아주 포괄적인 추천 요청) 카테고리 내에서 랜덤 샘플링
+    return shuffle(pool).slice(0, 5);
   }
 
-  if (
-    titleInitials === compactTerm ||
-    titleInitials.includes(
-      compactTerm
-    )
-  ) {
-    score += 30
-  }
-
-  if (
-    address.includes(
-      normalizedTerm
-    )
-  ) {
-    score += 22
-  }
-
-  if (
-    categories.includes(
-      normalizedTerm
-    )
-  ) {
-    score += 18
-  }
-
-  if (
-    compactFullText.includes(
-      compactTerm
-    )
-  ) {
-    score += 12
-  }
-
-  const titleSimilarity =
-    getSimilarity(
-      compactTitle,
-      compactTerm
-    )
-
-  if (
-    titleSimilarity >= 0.85
-  ) {
-    score +=
-      38 * titleSimilarity
-  } else if (
-    titleSimilarity >= 0.65
-  ) {
-    score +=
-      22 * titleSimilarity
-  }
-
-  const ngramSimilarity =
-    getNgramSimilarity(
-      compactTitle,
-      compactTerm
-    )
-
-  if (
-    ngramSimilarity >= 0.45
-  ) {
-    score +=
-      17 * ngramSimilarity
-  }
-
-  title
-    .split(' ')
-    .forEach(word => {
-      const wordSimilarity =
-        getSimilarity(
-          word,
-          normalizedTerm
-        )
-
-      if (
-        wordSimilarity >= 0.8
-      ) {
-        score +=
-          18 * wordSimilarity
-      }
+  const scored = pool
+    .map((item) => {
+      const { score, matched } = scoreItem(item, keywords);
+      return { item, score, matched };
     })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
 
-  return score
+  // 키워드 매칭 결과가 없으면, 최소한 카테고리 안에서라도 몇 개 보여준다
+  const finalList = scored.length > 0 ? scored : pool.map((item) => ({ item, score: 0, matched: [] }));
+
+  return finalList.slice(0, 5).map((x) => ({ ...x.item, _matchedKeywords: x.matched }));
 }
 
-const getContentTypeScore = (
-  item,
-  contentTypeIds
-) => {
-  if (!contentTypeIds.length) {
-    return 0
-  }
+// =====================================================
+// 3단계: 자연어 답변 생성
+// =====================================================
 
-  const typeId = String(
-    item.contenttypeid ?? ''
-  ).trim()
+const QUERY_TYPE_GUIDE = {
+  recommend:
+    "장소/행사 이름에서 유추되는 특징(예: '구미라면 축제'라면 라면을 주제로 한 축제)을 자연스럽게 짚어주며 소개해. 질문자가 원한 조건(아이와 함께 등)에 실제로 맞는지 데이터로 확인할 수 없다면, 단정하지 말고 '이름으로 보면 ~한 느낌이에요' 정도로 부드럽게 표현해.",
+  schedule:
+    "이 데이터에는 정확한 날짜·기간 정보가 없다는 걸 먼저 자연스럽게 알려줘. 그 대신 전화번호가 있으면 '정확한 일정은 이 번호로 문의해보시면 좋아요' 식으로 안내해.",
+  location:
+    "주소를 문장 안에 자연스럽게 녹여서 설명해. 예: '~에 위치한'. 좌표(mapx/mapy)는 사람이 읽기 불편하니 문장으로 옮기지 마.",
+  course:
+    "여러 장소를 묶어서 이동 흐름이 느껴지도록 순서를 제안하듯 설명해. 각 장소를 짧게 소개하며 다음 장소로 자연스럽게 이어지는 느낌으로 써.",
+  info: "질문에서 궁금해한 포인트를 우선적으로 짚어주고, 나머지는 보조적으로 설명해.",
+};
 
-  if (
-    contentTypeIds.includes(
-      typeId
-    )
-  ) {
-    return 30
-  }
+async function createAnswer(question, intent, searchResult, historyForLLM) {
+  const guide = QUERY_TYPE_GUIDE[intent.queryType] || QUERY_TYPE_GUIDE.info;
 
-  return -14
+  const system = `
+너는 구미·경북권 지역을 안내하는 친절한 여행 가이드 챗봇이다.
+
+아래로 전달되는 각 장소/행사 데이터에는 다음 필드만 있다: name(이름), address(주소), tel(전화번호).
+이 데이터베이스에는 설명글, 정확한 날짜/기간, 요금, 프로그램, 편의시설, 대상 연령 같은 정보가 전혀 없다.
+
+절대 규칙:
+1. name/address/tel에 실제로 있는 값만 사실로 언급한다. 날짜, 요금, 프로그램 내용 등 데이터에 없는 사실을 지어내지 않는다.
+2. 이름에서 자연스럽게 유추 가능한 테마(예: 이름에 '라면'이 들어가면 라면 관련 행사) 정도는 언급해도 되지만, "몇 회째", "몇 명 참여" 같은 구체적 수치는 절대 만들어내지 않는다.
+3. 이름과 주소만 나열하는 리스트 형태로 답하지 않는다. 반드시 자연스러운 문장/문단으로 설명한다.
+4. 장소가 여러 개면 번호(1, 2, 3)나 소제목 정도는 써도 되지만, 그 안의 설명은 완전한 문장으로 쓴다.
+5. 존댓말(해요체)로, 실제 사람 가이드가 설명해주듯 따뜻하고 자연스럽게 쓴다.
+6. image, lat, lng, id 같은 필드는 답변 문장에서 언급하지 않는다 (화면에 별도로 표시됨).
+7. 답변 마지막에 짧게 한 줄, 더 필요한 정보가 있으면 물어보라는 자연스러운 마무리를 덧붙인다.
+
+이번 질문 유형은 "${intent.queryType}"이다. ${guide}
+`.trim();
+
+  const user = `
+사용자 질문: ${question}
+
+검색된 JSON 데이터 (이 안의 정보만 활용할 것):
+${JSON.stringify(
+  searchResult.map(({ name, address, tel, category }) => ({ name, address, tel, category })),
+  null,
+  2
+)}
+`.trim();
+
+  return await callOpenAI({ system, user, history: historyForLLM, json: false });
 }
 
-const getAliasScore = (
-  item,
-  question
-) => {
-  const typeId = String(
-    item.contenttypeid ?? ''
-  ).trim()
+// =====================================================
+// 대화 기록을 LLM 컨텍스트로 변환 (최근 몇 턴만)
+// =====================================================
 
-  const aliases =
-    CONTENT_TYPE_ALIASES[
-      typeId
-    ] || []
-
-  const normalizedQuestion =
-    normalizeText(question)
-
-  const compactQuestion =
-    compactText(question)
-
-  return aliases.reduce(
-    (score, alias) => {
-      const normalizedAlias =
-        normalizeText(alias)
-
-      const compactAlias =
-        compactText(alias)
-
-      if (
-        normalizedQuestion.includes(
-          normalizedAlias
-        ) ||
-        compactQuestion.includes(
-          compactAlias
-        )
-      ) {
-        return score + 9
-      }
-
-      return score
-    },
-    0
-  )
+function buildHistoryForLLM() {
+  return messages.value
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-6)
+    .map((m) => ({ role: m.role, content: m.content }));
 }
 
-const searchAttractions = ({
-  question,
-  analysis
-}) => {
-  const allTerms = [
-    ...new Set([
-      ...analysis.searchTerms,
-      ...analysis.expandedTerms
-    ])
-  ].filter(Boolean)
+// =====================================================
+// 메시지 전송 (오케스트레이션)
+// =====================================================
 
-  if (
-    analysis.isFollowUp &&
-    lastContextItems.value.length &&
-    !analysis.searchTerms.length
-  ) {
-    return lastContextItems.value.slice(
-      0,
-      MAX_MODEL_CONTEXT_ITEMS
-    )
-  }
+async function sendMessage() {
+  const question = input.value.trim();
+  if (!question || loading.value) return;
 
-  const scoredItems =
-    attractions.value
-      .map(item => {
-        let score = 0
+  const historyForLLM = buildHistoryForLLM();
 
-        score +=
-          getContentTypeScore(
-            item,
-            analysis.contentTypeIds
-          )
-
-        score += getAliasScore(
-          item,
-          question
-        )
-
-        allTerms.forEach(
-          (term, index) => {
-            const weight =
-              index <
-              analysis.searchTerms
-                .length
-                ? 1
-                : 0.6
-
-            score +=
-              getTermScore(
-                item,
-                term
-              ) * weight
-          }
-        )
-
-        if (
-          !allTerms.length &&
-          analysis.contentTypeIds.includes(
-            String(
-              item.contenttypeid ??
-                ''
-            ).trim()
-          )
-        ) {
-          score += 15
-        }
-
-        if (
-          !allTerms.length &&
-          !analysis.contentTypeIds.length
-        ) {
-          score += 1
-        }
-
-        return {
-          item,
-          score
-        }
-      })
-      .filter(result => {
-        if (
-          !allTerms.length &&
-          !analysis.contentTypeIds
-            .length
-        ) {
-          return true
-        }
-
-        return result.score > 0
-      })
-      .sort(
-        (left, right) => {
-          if (
-            right.score !==
-            left.score
-          ) {
-            return (
-              right.score -
-              left.score
-            )
-          }
-
-          return String(
-            left.item.title ?? ''
-          ).localeCompare(
-            String(
-              right.item.title ??
-                ''
-            ),
-            'ko'
-          )
-        }
-      )
-
-  let results = scoredItems
-    .slice(0, MAX_SEARCH_RESULTS)
-    .map(result => result.item)
-
-  if (
-    !results.length &&
-    analysis.contentTypeIds.length
-  ) {
-    results =
-      attractions.value
-        .filter(item =>
-          analysis.contentTypeIds.includes(
-            String(
-              item.contenttypeid ??
-                ''
-            ).trim()
-          )
-        )
-        .slice(
-          0,
-          MAX_SEARCH_RESULTS
-        )
-  }
-
-  if (
-    !results.length &&
-    analysis.isFollowUp &&
-    lastContextItems.value.length
-  ) {
-    results =
-      lastContextItems.value
-  }
-
-  return results.slice(
-    0,
-    MAX_MODEL_CONTEXT_ITEMS
-  )
-}
-
-const createModelItem = item => ({
-  contentid: String(
-    item.contentid ?? ''
-  ),
-  contenttypeid: String(
-    item.contenttypeid ?? ''
-  ),
-  contentTypeName:
-    CONTENT_TYPE_NAMES[
-      String(
-        item.contenttypeid ?? ''
-      ).trim()
-    ] || '분류 정보 없음',
-  title: String(
-    item.title ?? ''
-  ),
-  address: [
-    item.addr1,
-    item.addr2
-  ]
-    .filter(Boolean)
-    .join(' '),
-  zipcode: String(
-    item.zipcode ?? ''
-  ),
-  tel: String(item.tel ?? ''),
-  mapx: String(item.mapx ?? ''),
-  mapy: String(item.mapy ?? ''),
-  image: String(
-    item.firstimage ||
-      item.firstimage2 ||
-      ''
-  )
-})
-
-const buildFallbackReply = ({
-  analysis,
-  items
-}) => {
-  if (!items.length) {
-    return '현재 저장된 관광 데이터에서는 질문과 관련된 정보를 찾지 못했습니다. 장소 이름이나 원하는 유형을 조금 더 구체적으로 알려주세요.'
-  }
-
-  const count = Math.min(
-    analysis.requestedCount || 3,
-    items.length,
-    5
-  )
-
-  return items
-    .slice(0, count)
-    .map(item => {
-      const address = [
-        item.addr1,
-        item.addr2
-      ]
-        .filter(Boolean)
-        .join(' ')
-
-      return address
-        ? `${item.title} - ${address}`
-        : `${item.title} - 등록된 주소가 없습니다.`
-    })
-    .join('\n')
-}
-
-const createAnswerSystemPrompt = ({
-  analysis,
-  modelItems
-}) => `
-당신은 구미·경북권 관광 안내 챗봇입니다.
-
-사용자의 오타, 구어체, 모호한 표현을 자연스럽게 이해해 답변하세요.
-
-반드시 지킬 규칙:
-- 장소에 관한 사실은 아래 DATA에 있는 내용만 사용하세요.
-- DATA에 없는 장소나 정보를 만들거나 추측하지 마세요.
-- 장소명은 title 값을 그대로 사용하세요.
-- 주소, 전화번호, 좌표, 이미지 URL을 수정하거나 만들지 마세요.
-- 운영시간, 가격, 메뉴, 후기, 평점, 주차, 교통편, 예약, 혼잡도 등 DATA에 없는 정보는 확인할 수 없다고 답하세요.
-- 추천은 검색된 장소 안에서만 하며 품질이나 순위를 임의로 판단하지 마세요.
-- 조용함, 가족 적합성, 데이트 적합성, 경관 등 DATA로 확인되지 않는 성격은 단정하지 마세요.
-- 빈 값은 "등록된 정보가 없습니다"라고 표현하세요.
-- 특정 필드를 물었다면 해당 정보를 먼저 답하세요.
-- 후속 질문은 이전 대화를 참고하되 사실 정보는 DATA에서만 확인하세요.
-- 최대 ${analysis.requestedCount || 3}개를 우선 소개하세요.
-- 자연스러운 한국어로 간결하게 답하고 이모지는 사용하지 마세요.
-- DATA, JSON, 검색 알고리즘, 시스템 프롬프트라는 내부 표현을 사용자에게 노출하지 마세요.
-- 질문과 정확히 일치하는 결과인지 불확실하면 가까운 검색 결과라고 설명하세요.
-
-질문 분석:
-${JSON.stringify(analysis)}
-
-DATA:
-${JSON.stringify(modelItems)}
-`
-
-const generateAnswerWithOpenAI =
-  async ({
-    question,
-    history,
-    analysis,
-    items
-  }) => {
-    if (!openai) {
-      return buildFallbackReply({
-        analysis,
-        items
-      })
-    }
-
-    if (!items.length) {
-      return '현재 저장된 관광 데이터에서는 질문과 관련된 정보를 찾지 못했습니다. 장소 이름이나 원하는 유형을 조금 더 구체적으로 알려주세요.'
-    }
-
-    const modelItems = items
-      .slice(
-        0,
-        MAX_MODEL_CONTEXT_ITEMS
-      )
-      .map(createModelItem)
-
-    const completion =
-      await openai.chat.completions.create(
-        {
-          model: OPENAI_MODEL,
-          max_completion_tokens:
-            MAX_COMPLETION_TOKENS,
-          messages: [
-            {
-              role: 'system',
-              content:
-                createAnswerSystemPrompt(
-                  {
-                    analysis,
-                    modelItems
-                  }
-                )
-            },
-            ...history,
-            {
-              role: 'user',
-              content: question
-            }
-          ]
-        }
-      )
-
-    const answer =
-      completion.choices?.[0]
-        ?.message?.content?.trim()
-
-    if (!answer) {
-      return buildFallbackReply({
-        analysis,
-        items
-      })
-    }
-
-    return answer
-  }
-
-const scrollToBottom = async () => {
-  await nextTick()
-
-  const container =
-    messagesContainer.value
-
-  if (!container) return
-
-  container.scrollTop =
-    container.scrollHeight
-}
-
-const openChat = async () => {
-  isChatOpen.value = true
-  await scrollToBottom()
-}
-
-const closeChat = () => {
-  isChatOpen.value = false
-}
-
-const getErrorMessage = error => {
-  const status = error?.status
-
-  if (status === 401) {
-    return 'OpenAI API 키가 올바르지 않거나 사용할 수 없습니다.'
-  }
-
-  if (status === 403) {
-    return '현재 API 키로 요청할 권한이 없습니다.'
-  }
-
-  if (status === 404) {
-    return '설정된 OpenAI 모델을 찾을 수 없습니다.'
-  }
-
-  if (status === 429) {
-    return 'OpenAI API 사용 한도 또는 요청 횟수를 초과했습니다.'
-  }
-
-  if (status === 400) {
-    return (
-      error?.error?.message ||
-      error?.message ||
-      'OpenAI API 요청 형식이나 모델 설정을 확인해 주세요.'
-    )
-  }
-
-  if (
-    error?.name === 'TypeError' &&
-    /fetch|network|failed/i.test(
-      error?.message ?? ''
-    )
-  ) {
-    return '네트워크 연결이나 브라우저 요청 차단 여부를 확인해 주세요.'
-  }
-
-  return (
-    error?.error?.message ||
-    error?.message ||
-    '알 수 없는 오류가 발생했습니다.'
-  )
-}
-
-const sendMessage = async text => {
-  const content = String(
-    text ?? newQuestion.value
-  ).trim()
-
-  if (
-    !content ||
-    isLoading.value ||
-    isDataLoading.value
-  ) {
-    return
-  }
-
-  await openChat()
-
-  const history =
-    getConversationHistory()
-
-  messages.value.push({
-    type: 'user',
-    text: content
-  })
-
-  newQuestion.value = ''
-  isLoading.value = true
-
-  await scrollToBottom()
+  messages.value.push({ role: "user", content: question });
+  input.value = "";
+  loading.value = true;
+  await scrollBottom();
 
   try {
-    if (dataLoadError.value) {
-      throw new Error(
-        dataLoadError.value
-      )
+    if (!dbReady.value || regionDB.value.length === 0) {
+      messages.value.push({
+        role: "assistant",
+        content: "지역 정보 데이터를 아직 불러오는 중이에요. 잠시 후 다시 물어봐 주세요!",
+      });
+      return;
     }
 
-    if (!attractions.value.length) {
-      throw new Error(
-        '불러온 관광 데이터가 없습니다.'
-      )
+    const intent = await analyzeQuestion(question, historyForLLM);
+
+    // 이 챗봇의 데이터 범위를 벗어난 질문 (예: 커뮤니티 게시글 검색 등)
+    if (!intent.inScope) {
+      messages.value.push({
+        role: "assistant",
+        content:
+          "앗, 그 부분은 제가 가진 관광지·축제·음식점 등 지역 정보 데이터로는 답해드리기 어려워요.\n혹시 관광지, 축제, 모범음식점, 숙박, 여행코스 같은 지역 정보가 궁금하시면 편하게 물어봐 주세요!",
+      });
+      return;
     }
 
-    if (!openai || !API_KEY) {
-      throw new Error(
-        'VITE_OPENAI_API_KEY가 설정되지 않았습니다.'
-      )
+    // 질문이 너무 모호해서 되물어야 하는 경우
+    if (intent.clarifyNeeded && intent.clarifyQuestion) {
+      messages.value.push({ role: "assistant", content: intent.clarifyQuestion });
+      return;
     }
 
-    const analysis =
-      createLocalQuestionAnalysis(
-        content
-      )
+    const searchResult = searchRegion(intent);
 
-    lastQuestionAnalysis.value =
-      analysis
-
-    const searchResults =
-      searchAttractions({
-        question: content,
-        analysis
-      })
-
-    if (searchResults.length) {
-      lastContextItems.value =
-        searchResults
+    let answer;
+    let sources = [];
+    if (searchResult.length === 0) {
+      answer =
+        "말씀하신 조건에 딱 맞는 정보를 아직 찾지 못했어요 😢 지역이나 키워드를 조금 다르게 말씀해주시면 다시 찾아볼게요!";
+    } else {
+      answer = await createAnswer(question, intent, searchResult, historyForLLM);
+      // 답변 아래에 참고용 카드(이름+사진)로 보여줄 항목 (이미지가 있는 것만)
+      sources = searchResult
+        .filter((item) => item.image)
+        .map((item) => ({ name: item.name, image: item.image, address: item.address }));
     }
 
-    const answer =
-      await generateAnswerWithOpenAI(
-        {
-          question: content,
-          history,
-          analysis,
-          items: searchResults
-        }
-      )
-
-    messages.value.push({
-      type: 'bot',
-      text: answer
-    })
+    messages.value.push({ role: "assistant", content: answer, sources });
   } catch (error) {
-    console.error(
-      '챗봇 요청 오류 전체:',
-      error
-    )
-
-    console.error(
-      'OpenAI 오류 상태:',
-      error?.status
-    )
-
-    console.error(
-      'OpenAI 오류 메시지:',
-      error?.message
-    )
-
-    console.error(
-      'OpenAI 오류 내용:',
-      error?.error
-    )
-
+    console.error(error);
     messages.value.push({
-      type: 'bot',
-      text: `답변을 불러오지 못했습니다. ${getErrorMessage(error)}`,
-      isError: true
-    })
+      role: "assistant",
+      content: "답변을 만드는 중에 오류가 발생했어요. 잠시 후 다시 시도해 주세요.",
+    });
   } finally {
-    isLoading.value = false
-    await scrollToBottom()
+    loading.value = false;
+    await scrollBottom();
   }
 }
 
-const openWithQuestion = text => {
-  sendMessage(text)
+async function scrollBottom() {
+  await nextTick();
+  if (chatBody.value) {
+    chatBody.value.scrollTop = chatBody.value.scrollHeight;
+  }
 }
 
-onMounted(() => {
-  loadTourData()
-})
-
-defineExpose({
-  openWithQuestion,
-  openChat,
-  closeChat
-})
+const showSuggestions = computed(() => messages.value.length <= 1 && !loading.value);
 </script>
 
 <template>
-  <div class="chat-shell">
-    <transition name="chat-slide">
-      <section
-        v-if="isChatOpen"
-        class="chat-panel"
-        role="dialog"
-        aria-label="구미 여행 챗봇"
-        @click.stop
-      >
-        <header class="chat-header">
-          <div>
-            <strong>
-              구미 여행 챗봇
-            </strong>
+  <button class="floating-chat" @click="open = !open" :aria-label="open ? '챗봇 닫기' : '챗봇 열기'">
+    💬
+  </button>
 
-            <p v-if="isDataLoading">
-              관광 데이터를 불러오고 있습니다.
-            </p>
+  <Transition name="chat-popup">
+    <div v-if="open" class="chat-overlay" @click.self="open = false">
+      <div class="chat-popup" role="dialog" aria-label="구미 지역 정보 챗봇">
+        <div class="chat-popup-header">
+          <div class="chat-header">🧭 구미·경북권 지역 정보 챗봇</div>
+          <button class="close-btn" @click="open = false" aria-label="닫기">✕</button>
+        </div>
 
-            <p v-else-if="dataLoadError">
-              관광 데이터 로딩에 실패했습니다.
-            </p>
+        <div class="chat-messages" ref="chatBody">
+          <div
+            v-for="(msg, idx) in messages"
+            :key="idx"
+            :class="['msg-group', msg.role === 'user' ? 'align-user' : 'align-bot']"
+          >
+            <div :class="['message', msg.role === 'user' ? 'user' : 'bot']">{{ msg.content }}</div>
 
-            <p v-else>
-              {{ attractions.length }}개의 관광 데이터를 기준으로 답변합니다.
-            </p>
+            <div v-if="msg.sources && msg.sources.length" class="source-cards">
+              <div v-for="(s, si) in msg.sources" :key="si" class="source-card">
+                <img :src="s.image" :alt="s.name" loading="lazy" />
+                <span class="source-card-name">{{ s.name }}</span>
+              </div>
+            </div>
           </div>
 
-          <button
-            type="button"
-            class="close-btn"
-            aria-label="챗봇 닫기"
-            @click="closeChat"
-          >
-            ×
-          </button>
-        </header>
-
-        <div
-          ref="messagesContainer"
-          class="chat-messages"
-          aria-live="polite"
-        >
-          <div
-            v-for="(message, index) in messages"
-            :key="index"
-            :class="[
-              'message',
-              message.type,
-              {
-                'error-message':
-                  message.isError
-              }
-            ]"
-          >
-            {{ message.text }}
+          <div v-if="loading" class="message typing">
+            답변을 준비하고 있어요<span class="typing-dot"></span>
           </div>
 
-          <div
-            v-if="isDataLoading"
-            class="message bot"
-          >
-            관광 데이터를 준비하고 있습니다.
-          </div>
-
-          <div
-            v-else-if="dataLoadError"
-            class="message bot error-message"
-          >
-            {{ dataLoadError }}
-          </div>
-
-          <div
-            v-if="isLoading"
-            class="message bot typing-indicator"
-            aria-label="답변 생성 중"
-          >
-            <span></span>
-            <span></span>
-            <span></span>
+          <div v-if="showSuggestions" class="actions" style="flex-wrap: wrap; margin-top: 4px;">
+            <button
+              v-for="(prompt, i) in suggestedPrompts"
+              :key="i"
+              class="secondary"
+              @click="useSuggestion(prompt)"
+            >
+              {{ prompt }}
+            </button>
           </div>
         </div>
 
-        <form
-          class="chat-popup-input"
-          @submit.prevent="sendMessage()"
-        >
+        <div class="chat-popup-input">
           <input
-            v-model="newQuestion"
+            v-model="input"
             type="text"
-            autocomplete="off"
-            :disabled="
-              isLoading ||
-              isDataLoading ||
-              Boolean(dataLoadError)
-            "
-            :placeholder="
-              isDataLoading
-                ? '관광 데이터를 불러오고 있습니다.'
-                : dataLoadError
-                  ? '관광 데이터를 불러오지 못했습니다.'
-                  : isLoading
-                    ? '답변을 생성하고 있습니다.'
-                    : '편하게 질문해 주세요.'
-            "
-            aria-label="관광 질문 입력"
+            placeholder="예) 아이랑 갈만한 관광지 추천해줘"
+            :disabled="loading"
+            @keyup.enter="sendMessage"
           />
-
-          <button
-            type="submit"
-            :disabled="
-              isLoading ||
-              isDataLoading ||
-              Boolean(dataLoadError) ||
-              !newQuestion.trim()
-            "
-          >
-            {{
-              isLoading
-                ? '전송 중'
-                : '전송'
-            }}
-          </button>
-        </form>
-      </section>
-    </transition>
-
-    <button
-      type="button"
-      class="floating-chat"
-      aria-label="챗봇 열기"
-      @click="openChat"
-    >
-      대화
-    </button>
-  </div>
+          <button @click="sendMessage" :disabled="loading || !input.trim()">전송</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <style scoped>
-.chat-shell {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 1000;
+/* 메시지 버블 + 참고 카드를 하나의 묶음으로 정렬하기 위한 래퍼.
+   기존 style.css의 .message 정렬(align-self)은 그대로 두고,
+   여기서는 버블과 카드를 같은 쪽으로 묶어주는 역할만 한다. */
+.msg-group {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 0.7rem;
+  gap: 6px;
+  max-width: 85%;
 }
-
-.chat-panel {
-  width: min(520px, calc(100vw - 1.5rem));
-  max-height: min(780px, calc(100vh - 1.5rem));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 18px;
-  background: #ffffff;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
-}
-
-.chat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-  padding: 0.95rem 1rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: linear-gradient(135deg, #2563eb, #3b82f6);
-  color: #ffffff;
-}
-
-.chat-header strong {
-  display: block;
-  font-size: 1rem;
-  letter-spacing: -0.025em;
-}
-
-.chat-header p {
-  margin: 0.2rem 0 0;
-  font-size: 0.82rem;
-  opacity: 0.9;
-}
-
-.close-btn {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  flex-shrink: 0;
-  padding: 0.2rem;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: #ffffff;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.close-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.close-btn:focus-visible {
-  outline: 2px solid #ffffff;
-  outline-offset: 2px;
-}
-
-.chat-messages {
-  min-height: 320px;
-  max-height: 560px;
-  padding: 0.95rem;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 0.65rem;
-  overflow-y: auto;
-  scroll-behavior: smooth;
-  background: #f8fafc;
-}
-
-.message {
-  width: fit-content;
-  max-width: 88%;
-  padding: 0.7rem 0.85rem;
-  border-radius: 14px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: keep-all;
-  font-size: 0.92rem;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-}
-
-.message.user {
+.msg-group.align-user {
   align-self: flex-end;
-  border-bottom-right-radius: 6px;
-  background: #dbeafe;
-  color: #1e3a8a;
+  align-items: flex-end;
 }
-
-.message.bot {
+.msg-group.align-bot {
   align-self: flex-start;
-  border: 1px solid #e5e7eb;
-  border-bottom-left-radius: 6px;
-  background: #ffffff;
-  color: #111827;
+  align-items: flex-start;
+}
+.msg-group .message {
+  max-width: 100%;
 }
 
-.error-message {
-  border-color: #fecaca;
-  background: #fef2f2;
-  color: #991b1b;
-}
-
-.typing-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  min-width: 54px;
-  padding: 0.65rem 0.8rem;
-}
-
-.typing-indicator span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #94a3b8;
-  animation: bounce 1.2s infinite ease-in-out;
-}
-
-.typing-indicator span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.typing-indicator span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-.chat-popup-input {
+.source-cards {
   display: flex;
-  flex-shrink: 0;
-  gap: 0.6rem;
-  padding: 0.8rem;
-  border-top: 1px solid #e5e7eb;
-  background: #ffffff;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
-.chat-popup-input input {
-  min-width: 0;
-  min-height: 44px;
-  flex: 1;
-  padding: 0 0.95rem;
-  border: 1px solid #d1d5db;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #111827;
-  font: inherit;
-  font-size: 0.95rem;
-  outline: none;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+.source-card {
+  flex: 0 0 auto;
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 6px;
+  text-align: center;
 }
 
-.chat-popup-input input:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+.source-card img {
+  width: 100%;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #e5e7eb;
 }
 
-.chat-popup-input input:disabled {
-  background: #f3f4f6;
-  cursor: not-allowed;
-}
-
-.chat-popup-input button {
-  min-height: 44px;
-  flex-shrink: 0;
-  padding: 0 1rem;
-  border: none;
-  border-radius: 999px;
-  background: #2563eb;
-  color: #ffffff;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.chat-popup-input button:hover:not(:disabled) {
-  background: #1d4ed8;
-}
-
-.chat-popup-input button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.chat-popup-input button:focus-visible {
-  outline: 2px solid #1d4ed8;
-  outline-offset: 2px;
-}
-
-.floating-chat {
-  min-width: 60px;
-  height: 60px;
-  padding: 0 1rem;
-  border: none;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #2563eb, #3b82f6);
-  color: #ffffff;
-  font: inherit;
-  font-weight: 700;
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.3);
-  cursor: pointer;
-  transition:
-    transform 0.2s,
-    box-shadow 0.2s;
-}
-
-.floating-chat:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 15px 34px rgba(37, 99, 235, 0.34);
-}
-
-.floating-chat:focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.35);
-  outline-offset: 3px;
-}
-
-.chat-slide-enter-active,
-.chat-slide-leave-active {
-  transition:
-    opacity 0.22s ease,
-    transform 0.22s ease;
-}
-
-.chat-slide-enter-from,
-.chat-slide-leave-to {
-  opacity: 0;
-  transform: translateY(14px) scale(0.98);
-}
-
-.chat-slide-enter-to,
-.chat-slide-leave-from {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-
-@keyframes bounce {
-  0%,
-  80%,
-  100% {
-    opacity: 0.6;
-    transform: scale(0.8);
-  }
-
-  40% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (max-width: 768px) {
-  .chat-shell {
-    right: 0.6rem;
-    bottom: 0.6rem;
-    left: 0.6rem;
-    align-items: stretch;
-  }
-
-  .chat-panel {
-    width: 100%;
-    max-height: 85vh;
-  }
-
-  .chat-messages {
-    min-height: 260px;
-    max-height: 55vh;
-  }
-
-  .floating-chat {
-    min-width: 68px;
-    height: 52px;
-    align-self: flex-end;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .chat-slide-enter-active,
-  .chat-slide-leave-active,
-  .typing-indicator span,
-  .chat-messages,
-  .floating-chat {
-    animation: none;
-    scroll-behavior: auto;
-    transition: none;
-  }
+.source-card-name {
+  font-size: 11px;
+  color: #374151;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 </style>
